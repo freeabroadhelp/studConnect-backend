@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Environment variables
+.env
+*.env
+
+# IDEs
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Data & logs
+*.log
+*.sqlite3
+backend/data/*.csv
+backend/data/*.json
+
+# Byte-compiled
+*.so
+
+# Test output
+htmlcov/
+.coverage
+.tox/
+.pytest_cache/
+.nox/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Misc
+*.bak
+*.swp
+
+.service_account.json
