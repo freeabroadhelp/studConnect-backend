@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import List, Optional, Any
 from sqlalchemy import JSON, Column, Integer, String, text
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import declarative_base, Session
+from sqlalchemy.orm import Session
 import boto3
 import os
 from sqlalchemy.ext.mutable import MutableDict
@@ -13,9 +13,7 @@ import re
 import mimetypes
 from urllib.parse import urlparse, unquote
 import requests
-
-Base = declarative_base()
-
+from db import Base
 
 class AustraliaScholarship(Base):
     __tablename__ = "australia_scholarships"
@@ -98,6 +96,7 @@ class ProgramDetail(Base):
     program = Column(JSONB)
     program_requirements = Column(JSONB)
     school_id = Column(Integer)
+    program_basic = Column(JSONB)
 
     @classmethod
     def upsert(cls, db: Session, entry: dict):
@@ -108,6 +107,7 @@ class ProgramDetail(Base):
             obj.program = entry.get('program')
             obj.program_requirements = entry.get('program_requirements')
             obj.school_id = entry.get('school_id')
+            obj.program_basic = entry.get('program_basic')
         else:
             obj = cls(
                 id=entry['id'],
@@ -115,7 +115,8 @@ class ProgramDetail(Base):
                 school=entry.get('school'),
                 program=entry.get('program'),
                 program_requirements=entry.get('program_requirements'),
-                school_id=entry.get('school_id')
+                school_id=entry.get('school_id'),
+                program_basic=entry.get('program_basic')
             )
             db.add(obj)
         db.flush()
@@ -270,11 +271,6 @@ def upload_public_url_to_r2_and_get_url(public_url: str, key_prefix: str = "uplo
 
     return f"{r2_public_url.rstrip('/')}/{key}"
 
-# If you are getting a 500 error on /api/programs, check the following:
-# 1. The "programs" table exists and is populated.
-# 2. The "attributes" JSONB column contains the keys you are filtering on (e.g., tuition, name, school).
-# 3. The database user has permission to query the table.
-# 4. If you are using Postgres, make sure the JSONB operators (as_integer, astext, etc.) are supported by your SQLAlchemy/Postgres version.
-# 5. Check your backend logs for the actual Python exception and stack trace for more details.
+
 
 

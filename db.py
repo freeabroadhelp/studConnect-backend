@@ -3,7 +3,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from dotenv import load_dotenv
 from contextlib import contextmanager
-from models.models import AustraliaScholarship
 
 load_dotenv()
 
@@ -21,7 +20,6 @@ Base.metadata.create_all(bind=engine)
 
 @contextmanager
 def get_db():
-    """Yield a SQLAlchemy session, commit on success, rollback on exception."""
     db = SessionLocal()
     try:
         yield db

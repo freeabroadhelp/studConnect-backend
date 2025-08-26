@@ -12,8 +12,9 @@ from google.oauth2 import service_account
 import gspread
 from fastapi.responses import JSONResponse
 import json
-from sqlalchemy import cast, Integer
+from sqlalchemy import cast, Integer, text
 from sqlalchemy.exc import SQLAlchemyError
+import logging
 
 from models.models import (
     Program,Service, Scholarship, LeadIn, LeadOut, Booking, BookingCreate, AustraliaScholarship, UniversityModel 
@@ -27,6 +28,9 @@ from utils.email_service import send_otp, smtp_diagnostics
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logging.basicConfig(level=logging.INFO)
+logging.info("App starting with DATABASE_URL: %s", os.environ.get("DATABASE_URL"))
 
 app = FastAPI()
 
@@ -60,6 +64,8 @@ Base.metadata.create_all(bind=engine)
 
 DB_URL = os.environ.get("DATABASE_URL")
 session = boto3.session.Session()
+
+logging.basicConfig(level=logging.INFO)
 
 def generate_otp(length: int = 6) -> str:
     return "".join(random.choices(string.digits, k=length))
@@ -305,61 +311,37 @@ def get_programs_by_school_id(
                 "school": prog.school,
                 "program": prog.program,
                 "program_requirements": prog.program_requirements,
-                "school_id": prog.school_id
+                "school_id": prog.school_id,
+                "program_basic": getattr(prog, "program_basic", None)
             }
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
-
-@app.get("/api/programs/filter")
-def filter_programs(
-    school_name: str = Query(None, description="School/University name (partial match)"),
-    country: str = Query(None, description="Country (partial match)"),
-    min_fees: int = Query(None, description="Minimum tuition fee"),
-    max_fees: int = Query(None, description="Maximum tuition fee"),
+@app.get("/api/program-details", tags=["programs"], summary="List programs from program_details table")
+def list_program_details(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     db_session=Depends(get_db),
 ):
     try:
+        from models.models import ProgramDetail
         with db_session as db:
-            query = db.query(Program)
-
-            # Filter by school/university name
-            if school_name:
-                query = query.filter(
-                    Program.attributes["school"]["name"].astext.ilike(f"%{school_name}%")
-                )
-
-            # Filter by country
-            if country:
-                query = query.filter(
-                    Program.attributes["school"]["country"].astext.ilike(f"%{country}%")
-                )
-
-            # Filter by tuition fees (assumes tuition is stored as integer in attributes['tuition'])
-            if min_fees is not None:
-                query = query.filter(
-                    cast(Program.attributes["tuition"].astext, Integer) >= min_fees
-                )
-            if max_fees is not None:
-                query = query.filter(
-                    cast(Program.attributes["tuition"].astext, Integer) <= max_fees
-                )
-
-            total = query.count()
             offset = (page - 1) * page_size
+            query = db.query(ProgramDetail)
+            total = query.count()
             results = query.offset(offset).limit(page_size).all()
-
             items = [
                 {
                     "id": prog.id,
-                    "type": prog.type,
                     "attributes": prog.attributes,
+                    "school": prog.school,
+                    "program": prog.program,
+                    "program_requirements": prog.program_requirements,
+                    "school_id": prog.school_id,
+                    "program_basic": getattr(prog, "program_basic", None),
                 }
                 for prog in results
             ]
-
             return {
                 "items": items,
                 "total": total,
@@ -367,9 +349,6 @@ def filter_programs(
                 "page_size": page_size,
                 "total_pages": (total + page_size - 1) // page_size,
             }
-    except SQLAlchemyError as e:
+    except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
-    finally:
-        # If we opened a context manager, close it
-        if hasattr(db_session, "__exit__"):
-            db_session.__exit__(None, None, None)
+    
