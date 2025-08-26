@@ -240,67 +240,8 @@ async def consultation_to_excel(request: Request):
         return JSONResponse(status_code=500, content={"error": str(e), "trace": traceback.format_exc()})
 
 
-# @app.get("/api/programs")
-# def get_programs(
-#     min_tuition: int = Query(None, description="Minimum tuition fee"),
-#     max_tuition: int = Query(None, description="Maximum tuition fee"),
-#     program_name: str = Query(None, description="Program name (partial match)"),
-#     university_name: str = Query(None, description="University name (partial match)"),
-#     country: str = Query(None, description="Country code (exact match, e.g. 'CA')"),
-#     page: int = Query(1, ge=1),
-#     page_size: int = Query(50, ge=1, le=200),
-#     db: Session = Depends(get_db),
-# ):
-#     query = db.query(Program)
 
-#     # Tuition filters
-#     if min_tuition is not None:
-#         query = query.filter(
-#             cast(Program.attributes["tuition"].astext, Integer) >= min_tuition
-#         )
-#     if max_tuition is not None:
-#         query = query.filter(
-#             cast(Program.attributes["tuition"].astext, Integer) <= max_tuition
-#         )
-
-#     # Program name filter (attributes.name)
-#     if program_name:
-#         query = query.filter(
-#             Program.attributes["name"].astext.ilike(f"%{program_name}%")
-#         )
-
-#     if university_name:
-#         query = query.filter(
-#             Program.attributes["school"]["name"].astext.ilike(f"%{university_name}%")
-#         )
-
-#     if country:
-#         query = query.filter(
-#             Program.attributes["school"]["countryCode"].astext == country
-#         )
-
-#     total = query.count()
-#     offset = (page - 1) * page_size
-#     results = query.offset(offset).limit(page_size).all()
-
-#     items = [
-#         {
-#             "id": prog.id,
-#             "type": prog.type,
-#             "attributes": prog.attributes,
-#         }
-#         for prog in results
-#     ]
-
-#     return {
-#         "items": items,
-#         "total": total,
-#         "page": page,
-#         "page_size": page_size,
-#         "total_pages": (total + page_size - 1) // page_size,
-#     }
-    
-    
+        
 @app.get("/universities/{school_id}")
 def get_university_by_school_id(
     school_id: str,
@@ -346,26 +287,29 @@ def get_scholarships_by_school_id(
             for sch in scholarships
         ]
 
-@app.get("/api/programs/by-school/{school_id}")
+@app.get("/api/programs/{program_id}")
 def get_programs_by_school_id(
-    school_id: str,
+    program_id: str,
     db_session=Depends(get_db)
 ):
-    db: Session
-    with db_session as db:
-        from models.models import ProgramDetail
-        programs = db.query(ProgramDetail).filter(ProgramDetail.school_id == str(school_id)).all()
-        return [
-            {
+    try:
+        db: Session
+        with db_session as db:
+            from models.models import ProgramDetail
+            prog = db.query(ProgramDetail).filter(ProgramDetail.id == str(program_id)).first()
+            if not prog:
+                return JSONResponse(status_code=200, content={})
+            return {
                 "id": prog.id,
-                "type": prog.type,
                 "attributes": prog.attributes,
                 "school": prog.school,
                 "program": prog.program,
-                "program_requirements": prog.program_requirements
+                "program_requirements": prog.program_requirements,
+                "school_id": prog.school_id
             }
-            for prog in programs
-        ]
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
 
 @app.get("/api/programs/filter")
 def filter_programs(
