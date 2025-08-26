@@ -12,7 +12,7 @@ from google.oauth2 import service_account
 import gspread
 from fastapi.responses import JSONResponse
 import json
-from sqlalchemy import cast, Integer, text
+from sqlalchemy import cast, Integer, text, Float
 from sqlalchemy.exc import SQLAlchemyError
 import logging
 
@@ -319,16 +319,47 @@ def get_programs_by_school_id(
 
 @app.get("/api/program-details", tags=["programs"], summary="List programs from program_details table")
 def list_program_details(
+    university_name: Optional[str] = Query(None, description="University name (partial match)"),
+    program_name: Optional[str] = Query(None, description="Program name (partial match)"),
+    country: Optional[str] = Query(None, description="Country code (partial match)"),
+    min_fees: Optional[int] = Query(None, description="Minimum tuition fee"),
+    max_fees: Optional[int] = Query(None, description="Maximum tuition fee"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     db_session=Depends(get_db),
 ):
     try:
         from models.models import ProgramDetail
+        from sqlalchemy import cast, Integer
         with db_session as db:
-            offset = (page - 1) * page_size
             query = db.query(ProgramDetail)
+
+            if university_name:
+                query = query.filter(
+                    ProgramDetail.school["name"].astext.ilike(f"%{university_name}%")
+                )
+
+            if program_name:
+                query = query.filter(
+                    ProgramDetail.attributes["name"].astext.ilike(f"%{program_name}%")
+                )
+
+            if country:
+                query = query.filter(
+                    ProgramDetail.school["country"].astext.ilike(f"%{country}%")
+                )
+
+            if min_fees is not None:
+                query = query.filter(
+                    cast(ProgramDetail.attributes["tuition"].astext, Float) >= min_fees
+                )
+            if max_fees is not None:
+                query = query.filter(
+                    cast(ProgramDetail.attributes["tuition"].astext, Float) <= max_fees
+                )
+
             total = query.count()
+            offset = (page - 1) * page_size
             results = query.offset(offset).limit(page_size).all()
             items = [
                 {
@@ -351,4 +382,4 @@ def list_program_details(
             }
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
-    
+
