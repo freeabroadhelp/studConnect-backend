@@ -30,7 +30,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
-logging.info("App starting with DATABASE_URL: %s", os.environ.get("DATABASE_URL"))
+logging.info("App starting with DATABASE_URL")
 
 app = FastAPI()
 
@@ -247,7 +247,40 @@ async def consultation_to_excel(request: Request):
 
 
 
-        
+@app.post("/api/accommodation-excel")
+async def accommodation_to_excel(request: Request):
+    try:
+        data = await request.json()
+        if "timestamp" not in data:
+            data["timestamp"] = datetime.utcnow().isoformat()
+
+        row = [
+            data.get("name", ""),
+            data.get("email", ""),
+            data.get("phone", ""),
+            data.get("message", ""),
+            data.get("timestamp", "")
+        ]
+
+        GOOGLE_SERVICE_ACCOUNT_FILE = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE")
+        ACCOMMODATION_SPREADSHEET_ID = os.environ.get("ACCOMMODATION_FILE_ID")
+
+        creds = service_account.Credentials.from_service_account_file(
+            GOOGLE_SERVICE_ACCOUNT_FILE,
+            scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        )
+
+        gc = gspread.authorize(creds)
+        sh = gc.open_by_key(ACCOMMODATION_SPREADSHEET_ID)
+        worksheet = sh.sheet1
+        worksheet.append_row(row)
+
+        return {"status": "ok", "message": "Accommodation data saved to Google Sheet"}
+
+    except Exception as e:
+        import traceback
+        return JSONResponse(status_code=500, content={"error": str(e), "trace": traceback.format_exc()})
+
 @app.get("/universities/{school_id}")
 def get_university_by_school_id(
     school_id: str,
