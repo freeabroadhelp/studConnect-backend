@@ -1,6 +1,6 @@
 from itertools import count
 import json
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, constr
 from datetime import datetime
 from typing import List, Optional, Any
 from sqlalchemy import JSON, Column, Integer, String, text
@@ -86,6 +86,14 @@ class Booking(BaseModel):
 class BookingCreate(BaseModel):
     topic: str
     scheduled_for: datetime
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    code: str
+    new_password: constr(min_length=6)
 
 
 class ProgramDetail(Base):

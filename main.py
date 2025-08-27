@@ -17,7 +17,8 @@ from sqlalchemy.exc import SQLAlchemyError
 import logging
 
 from models.models import (
-    Program,Service, Scholarship, LeadIn, LeadOut, Booking, BookingCreate, AustraliaScholarship, UniversityModel 
+    Program,Service, Scholarship, LeadIn, LeadOut, Booking, BookingCreate, AustraliaScholarship, UniversityModel ,ResetPasswordRequest,ForgotPasswordRequest
+
 )
 from db import Base, engine, get_db
 from models.models_user import User
@@ -415,4 +416,36 @@ def list_program_details(
             }
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.post("/auth/forgot-password", tags=["auth"], summary="Request password reset (send OTP)")
+def forgot_password(payload: ForgotPasswordRequest, db_session=Depends(get_db)):
+    db: Session
+    with db_session as db:
+        user = get_user_by_email(db, payload.email.lower())
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        code = generate_otp()
+        user.set_otp(code)
+        if not send_otp(user.email, code):
+            raise HTTPException(status_code=500, detail="Could not send reset email (check SMTP settings)")
+        return {"message": "Password reset OTP sent to email"}
+
+@app.post("/auth/reset-password", tags=["auth"], summary="Reset password using OTP")
+def reset_password(payload: ResetPasswordRequest, db_session=Depends(get_db)):
+    db: Session
+    with db_session as db:
+        user = get_user_by_email(db, payload.email.lower())
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        if not user.otp_code or not user.otp_expires:
+            raise HTTPException(status_code=400, detail="No OTP pending")
+        if datetime.utcnow() > user.otp_expires:
+            raise HTTPException(status_code=400, detail="OTP expired")
+        if payload.code != user.otp_code:
+            raise HTTPException(status_code=400, detail="Invalid OTP")
+        user.password_hash = hash_password(payload.new_password)
+        user.otp_code = None
+        user.otp_expires = None
+        return {"message": "Password reset successful"}
 
