@@ -221,6 +221,9 @@ async def consultation_to_excel(request: Request):
             data.get("phone", ""),
             data.get("dial_code", ""),
             data.get("nationality", ""),
+            data.get("preferred_destination", ""),      # <-- Added
+            data.get("preferred_study_level", ""),      # <-- Added
+            data.get("preferred_start_year", ""),       # <-- Added
             data.get("timestamp", "")
         ]
 
@@ -233,11 +236,8 @@ async def consultation_to_excel(request: Request):
         )
 
         gc = gspread.authorize(creds)
-
         sh = gc.open_by_key(SPREADSHEET_ID)
-
         worksheet = sh.sheet1
-
         worksheet.append_row(row)
 
         return {"status": "ok", "message": "Consultation saved to Google Sheet"}
@@ -245,7 +245,6 @@ async def consultation_to_excel(request: Request):
     except Exception as e:
         import traceback
         return JSONResponse(status_code=500, content={"error": str(e), "trace": traceback.format_exc()})
-
 
 
 @app.post("/api/accommodation-excel")
