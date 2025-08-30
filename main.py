@@ -490,5 +490,6 @@ def google_oauth_login(
         elif not user.is_verified:
             user.is_verified = True
 
-        return TokenResponse(access_token=create_token(str(user.id)))
+        access_token = create_token(str(user.id))
+        return {"access_token": access_token}
 
