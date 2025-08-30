@@ -15,6 +15,8 @@ import json
 from sqlalchemy import cast, Integer, text, Float
 from sqlalchemy.exc import SQLAlchemyError
 import logging
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 
 from models.models import (
     Program,Service, Scholarship, LeadIn, LeadOut, Booking, BookingCreate, AustraliaScholarship, UniversityModel ,ResetPasswordRequest,ForgotPasswordRequest
@@ -447,4 +449,45 @@ def reset_password(payload: ResetPasswordRequest, db_session=Depends(get_db)):
         user.otp_code = None
         user.otp_expires = None
         return {"message": "Password reset successful"}
+
+@app.post("/api/auth/google", tags=["auth"], summary="Google OAuth login/register")
+def google_oauth_login(
+    payload: dict = Body(...),
+    db_session=Depends(get_db)
+):
+    token = payload.get("token")
+    if not token:
+        raise HTTPException(status_code=400, detail="Missing Google token")
+
+    GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
+    if not GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=500, detail="Google client ID not configured")
+
+    try:
+        idinfo = id_token.verify_oauth2_token(token, google_requests.Request(), GOOGLE_CLIENT_ID)
+        email = idinfo.get("email")
+        full_name = idinfo.get("name", "")
+        if not email:
+            raise HTTPException(status_code=400, detail="Google token missing email")
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid Google token: {str(e)}")
+
+    db: Session
+    with db_session as db:
+        user = get_user_by_email(db, email.lower())
+        if not user:
+            # Register new user with a unique random password hash
+            random_password = ''.join(random.choices(string.ascii_letters + string.digits, k=32))
+            user = create_user(
+                db,
+                email=email,
+                full_name=full_name,
+                role="student",
+                password_hash=hash_password(random_password),
+            )
+            user.is_verified = True
+        elif not user.is_verified:
+            user.is_verified = True
+
+        return TokenResponse(access_token=create_token(str(user.id)))
 
