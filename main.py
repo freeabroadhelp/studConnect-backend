@@ -136,13 +136,15 @@ def auth_user(authorization: str | None = Header(default=None), db_session=Depen
     token = authorization.split(" ",1)[1]
     try:
         data = decode_token(token)
-    except Exception:
+    except Exception as e:
+        logging.error(f"Token decode failed: {e}")
         raise HTTPException(status_code=401, detail="Invalid token")
     user_id = data.get("sub")
     db: Session
     with db_session as db:
         user = db.get(User, user_id)
         if not user:
+            logging.error(f"User not found for id: {user_id}")
             raise HTTPException(status_code=401, detail="User not found")
         payload = {
             "id": str(user.id),
@@ -476,7 +478,6 @@ def google_oauth_login(
     with db_session as db:
         user = get_user_by_email(db, email.lower())
         if not user:
-            # Register new user with a unique random password hash
             random_password = ''.join(random.choices(string.ascii_letters + string.digits, k=32))
             user = create_user(
                 db,
