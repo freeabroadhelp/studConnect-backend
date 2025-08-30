@@ -138,14 +138,14 @@ def auth_user(authorization: str | None = Header(default=None), db_session=Depen
         data = decode_token(token)
     except Exception as e:
         logging.error(f"Token decode failed: {e}")
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(status_code=401, detail=f"Invalid token: {e}")
     user_id = data.get("sub")
     db: Session
     with db_session as db:
         user = db.get(User, user_id)
         if not user:
             logging.error(f"User not found for id: {user_id}")
-            raise HTTPException(status_code=401, detail="User not found")
+            raise HTTPException(status_code=401, detail=f"User not found for id: {user_id}")
         payload = {
             "id": str(user.id),
             "email": user.email,
