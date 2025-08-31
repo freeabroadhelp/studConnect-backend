@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, Depends, Header, Query, Path, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timedelta
+from sqlalchemy import and_
 from sqlalchemy.orm import Session
 import random, string
 from typing import Optional
@@ -19,15 +20,15 @@ from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 
 from models.models import (
-    Program,Service, Scholarship, LeadIn, LeadOut, Booking, BookingCreate, AustraliaScholarship, UniversityModel ,ResetPasswordRequest,ForgotPasswordRequest
-
+    Program,Service, Scholarship, LeadIn, LeadOut, Booking, BookingCreate, AustraliaScholarship, UniversityModel ,ResetPasswordRequest,ForgotPasswordRequest,
+    PeerCounsellor, PeerCounsellorAvailability,PeerCounsellorBooking
 )
 from db import Base, engine, get_db
 from models.models_user import User
 from models.schemas_user import UserRegister, UserLogin, UserVerify, UserOut, TokenResponse
 from utils.crud_user import get_user_by_email, create_user
 from utils.auth_utils import hash_password, verify_password, create_token, decode_token
-from utils.email_service import send_otp, smtp_diagnostics
+from utils.email_service import send_otp, smtp_diagnostics, send_email  # Make sure send_email is imported
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -492,4 +493,302 @@ def google_oauth_login(
 
         access_token = create_token(str(user.id))
         return {"access_token": access_token}
+
+@app.get("/peer-counsellors/{counsellor_id}/available-slots", tags=["peer-counsellors"])
+def get_available_slots(
+    counsellor_id: int,
+    db_session=Depends(get_db)
+):
+   
+    db: Session
+    with db_session as db:
+
+        availabilities = db.query(PeerCounsellorAvailability).filter_by(counsellor_id=counsellor_id).all()
+
+        now = datetime.utcnow()
+        week_later = now + timedelta(days=7)
+        bookings = db.query(PeerCounsellorBooking).filter(
+            PeerCounsellorBooking.counsellor_id == counsellor_id,
+            PeerCounsellorBooking.slot_date >= now,
+            PeerCounsellorBooking.slot_date < week_later,
+            PeerCounsellorBooking.payment_status == "paid"
+        ).all()
+
+        booked = set((b.slot_date.date(), b.slot_id) for b in bookings)
+
+        result = []
+        for day_offset in range(7):
+            day = now.date() + timedelta(days=day_offset)
+            weekday = day.strftime("%A")
+            for av in availabilities:
+                if av.day_of_week == weekday:
+                    slot_start = datetime.combine(day, datetime.strptime(av.start_time, "%H:%M").time())
+                    slot_end = datetime.combine(day, datetime.strptime(av.end_time, "%H:%M").time())
+                    if (day, av.id) not in booked:
+                        result.append({
+                            "slot_id": av.id,
+                            "date": day.isoformat(),
+                            "start_time": av.start_time,
+                            "end_time": av.end_time,
+                        })
+        return result
+
+@app.get("/peer-counsellors", tags=["peer-counsellors"])
+def list_peer_counsellors(db_session=Depends(get_db)):
+   
+    db: Session
+    with db_session as db:
+        peers = db.query(PeerCounsellor).all()
+        result = []
+        for peer in peers:
+            result.append({
+                "id": peer.id,
+                "email": peer.email,
+                "name": peer.name,
+                "phone": peer.phone,
+                "contact_method": peer.contact_method,
+                "university": peer.university,
+                "program": peer.program,
+                "location": peer.location,
+                "languages": peer.languages,
+                "profile_image_url": peer.profile_image_url,
+                "about": peer.about,
+                "expertise": peer.expertise,
+                "work_experience": peer.work_experience,
+                "peer_support_experience": peer.peer_support_experience,
+                "projects": peer.projects,
+                "journey": peer.journey,
+                "created_at": peer.created_at,
+                "charges": peer.charges
+            })
+        return result
+
+from fastapi import status
+
+@app.post("/peer-counsellors/upsert", tags=["peer-counsellors"], status_code=status.HTTP_201_CREATED)
+def upsert_peer_counsellor(
+    payload: dict = Body(...),
+    db_session=Depends(get_db)
+):
+   
+    db: Session
+    with db_session as db:
+        email = payload.get("email")
+        if not email:
+            raise HTTPException(status_code=400, detail="Email is required")
+        peer = db.query(PeerCounsellor).filter_by(email=email).first()
+        if peer:
+            for field in [
+                "name", "phone", "contact_method", "university", "program", "location",
+                "languages", "profile_image_url", "about", "expertise", "work_experience",
+                "peer_support_experience", "projects", "journey", "charges"
+            ]:
+                if field in payload:
+                    setattr(peer, field, payload[field])
+        else:
+            peer = PeerCounsellor(**payload)
+            db.add(peer)
+        db.commit()
+        db.refresh(peer)
+        return {
+            "id": peer.id,
+            "email": peer.email,
+            "name": peer.name,
+            "phone": peer.phone,
+            "contact_method": peer.contact_method,
+            "university": peer.university,
+            "program": peer.program,
+            "location": peer.location,
+            "languages": peer.languages,
+            "profile_image_url": peer.profile_image_url,
+            "about": peer.about,
+            "expertise": peer.expertise,
+            "work_experience": peer.work_experience,
+            "peer_support_experience": peer.peer_support_experience,
+            "projects": peer.projects,
+            "journey": peer.journey,
+            "created_at": peer.created_at,
+            "charges": peer.charges
+        }
+
+
+@app.post("/peer-counsellors/{counsellor_id}/availability/upsert", tags=["peer-counsellors"])
+def upsert_peer_availability(
+    counsellor_id: int,
+    slots: list[dict] = Body(...),
+    db_session=Depends(get_db)
+):
+    db: Session
+    with db_session as db:
+        db.query(PeerCounsellorAvailability).filter_by(counsellor_id=counsellor_id).delete()
+      
+        for slot in slots:
+            db.add(PeerCounsellorAvailability(
+                counsellor_id=counsellor_id,
+                day_of_week=slot["day_of_week"],
+                start_time=slot["start_time"],
+                end_time=slot["end_time"]
+            ))
+        db.commit()
+        return {"status": "ok", "count": len(slots)}
+
+@app.post("/peer-counsellors/book-slot", tags=["peer-counsellors"])
+def book_peer_counsellor_slot(
+    payload: dict = Body(...),
+    db_session=Depends(get_db)
+):
+    """
+    Book a session with a peer counsellor.
+    Expects JSON body:
+    {
+      "user_id": <int>,
+      "user_email": <str>,
+      "counsellor_id": <int>,
+      "counsellor_email": <str>,
+      "slot_id": <int>,
+      "slot_date": <ISO datetime string>,
+      "payment_status": <str, e.g. "pending" or "paid">,
+      "meeting_link": <str, optional>
+    }
+    """
+    db: Session
+    with db_session as db:
+        slot_date = datetime.fromisoformat(payload["slot_date"])
+        # Always prevent double booking for the same slot/date if any booking exists (pending or paid)
+        existing_paid = db.query(PeerCounsellorBooking).filter_by(
+            counsellor_id=payload["counsellor_id"],
+            slot_id=payload["slot_id"],
+            slot_date=slot_date,
+            payment_status="paid"
+        ).first()
+        if existing_paid:
+            raise HTTPException(status_code=409, detail="Slot already booked and paid for this date/time")
+
+        # Prevent double payment for the same slot/date (even if pending)
+        if payload.get("payment_status") == "paid":
+            existing_any = db.query(PeerCounsellorBooking).filter_by(
+                counsellor_id=payload["counsellor_id"],
+                slot_id=payload["slot_id"],
+                slot_date=slot_date
+            ).filter(PeerCounsellorBooking.payment_status.in_(["paid", "pending"])).first()
+            if existing_any:
+                raise HTTPException(status_code=409, detail="Slot already reserved or paid for this date/time")
+
+        booking = PeerCounsellorBooking(
+            user_id=payload["user_id"],
+            user_email=payload["user_email"],
+            counsellor_id=payload["counsellor_id"],
+            counsellor_email=payload["counsellor_email"],
+            slot_id=payload["slot_id"],
+            slot_date=slot_date,
+            payment_status=payload.get("payment_status", "pending"),
+            meeting_link=payload.get("meeting_link")
+        )
+        db.add(booking)
+        db.commit()
+        db.refresh(booking)
+        return {
+            "id": booking.id,
+            "user_id": booking.user_id,
+            "user_email": booking.user_email,
+            "counsellor_id": booking.counsellor_id,
+            "counsellor_email": booking.counsellor_email,
+            "slot_id": booking.slot_id,
+            "slot_date": booking.slot_date.isoformat(),
+            "payment_status": booking.payment_status,
+            "meeting_link": booking.meeting_link,
+            "created_at": booking.created_at.isoformat()
+        }
+
+@app.post("/peer-counsellors/confirm-payment", tags=["peer-counsellors"])
+def confirm_peer_counsellor_payment(
+    payload: dict = Body(...),
+    db_session=Depends(get_db)
+):
+    """
+    Confirm payment for a peer counsellor booking.
+    Expects JSON body:
+    {
+      "booking_id": <int>,
+      "meeting_link": <str, optional>
+    }
+    Sets payment_status to "paid" and (optionally) updates meeting_link.
+    """
+    db: Session
+    with db_session as db:
+        booking_id = payload.get("booking_id")
+        if not booking_id:
+            raise HTTPException(status_code=400, detail="booking_id is required")
+        booking = db.query(PeerCounsellorBooking).filter_by(id=booking_id).first()
+        if not booking:
+            raise HTTPException(status_code=404, detail="Booking not found")
+        if booking.payment_status == "paid":
+            raise HTTPException(status_code=409, detail="Booking already marked as paid")
+        # Prevent double booking for the same slot/date
+        existing_paid = db.query(PeerCounsellorBooking).filter(
+            PeerCounsellorBooking.counsellor_id == booking.counsellor_id,
+            PeerCounsellorBooking.slot_id == booking.slot_id,
+            PeerCounsellorBooking.slot_date == booking.slot_date,
+            PeerCounsellorBooking.payment_status == "paid",
+            PeerCounsellorBooking.id != booking.id
+        ).first()
+        if existing_paid:
+            raise HTTPException(status_code=409, detail="Slot already paid for by another user")
+
+        booking.payment_status = "paid"
+        if "meeting_link" in payload:
+            booking.meeting_link = payload["meeting_link"]
+        db.commit()
+        db.refresh(booking)
+
+        try:
+            slot_time = booking.slot_date.strftime("%A, %d %B %Y at %H:%M")
+            subject = "Your Peer Counselling Session is Confirmed"
+            message = (
+                f"Dear {booking.user_email},\n\n"
+                f"Your session with peer counsellor ({booking.counsellor_email}) has been booked.\n"
+                f"Date & Time: {slot_time}\n"
+                f"Meeting Link: {booking.meeting_link or 'Will be shared soon'}\n\n"
+                f"Please join the meeting 5 minutes prior to your scheduled time.\n\n"
+                f"Thank you for booking with us!\n"
+            )
+            send_email(
+                to_email=booking.user_email,
+                subject=subject,
+                message=message
+            )
+        except Exception as e:
+            logging.error(f"Failed to send confirmation email: {e}")
+
+        try:
+            slot_time = booking.slot_date.strftime("%A, %d %B %Y at %H:%M")
+            subject = "A Session Has Been Booked With You"
+            message = (
+                f"Dear {booking.counsellor_email},\n\n"
+                f"A student ({booking.user_email}) has booked a session with you.\n"
+                f"Date & Time: {slot_time}\n"
+                f"Meeting Link: {booking.meeting_link or 'Will be shared soon'}\n\n"
+                f"Please be ready and join the meeting 5 minutes prior to the scheduled time.\n\n"
+                f"Thank you for supporting students!\n"
+            )
+            send_email(
+                to_email=booking.counsellor_email,
+                subject=subject,
+                message=message
+            )
+        except Exception as e:
+            logging.error(f"Failed to send confirmation email to counsellor: {e}")
+
+        return {
+            "id": booking.id,
+            "user_id": booking.user_id,
+            "user_email": booking.user_email,
+            "counsellor_id": booking.counsellor_id,
+            "counsellor_email": booking.counsellor_email,
+            "slot_id": booking.slot_id,
+            "slot_date": booking.slot_date.isoformat(),
+            "payment_status": booking.payment_status,
+            "meeting_link": booking.meeting_link,
+            "created_at": booking.created_at.isoformat()
+        }
 

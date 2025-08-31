@@ -3,9 +3,9 @@ import json
 from pydantic import BaseModel, EmailStr, constr
 from datetime import datetime
 from typing import List, Optional, Any
-from sqlalchemy import JSON, Column, Integer, String, text
+from sqlalchemy import JSON, Column, Integer, String, Text, DateTime, ForeignKey, Float
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, relationship
 import boto3
 import os
 from sqlalchemy.ext.mutable import MutableDict
@@ -279,6 +279,52 @@ def upload_public_url_to_r2_and_get_url(public_url: str, key_prefix: str = "uplo
 
     return f"{r2_public_url.rstrip('/')}/{key}"
 
+class PeerCounsellor(Base):
+    __tablename__ = "peer_counsellors"
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, nullable=False)
+    name = Column(String, nullable=False)
+    phone = Column(String)
+    contact_method = Column(String)
+    university = Column(String)
+    program = Column(String)
+    location = Column(String)
+    languages = Column(String)
+    profile_image_url = Column(String)
+    about = Column(Text)
+    expertise = Column(Text)
+    work_experience = Column(Text)
+    peer_support_experience = Column(Text)
+    projects = Column(Text)
+    journey = Column(Text)
+    charges = Column(Float)  # New column for charges per slot
+    created_at = Column(DateTime, default=datetime.utcnow)
 
+    availabilities = relationship("PeerCounsellorAvailability", back_populates="counsellor", cascade="all, delete-orphan")
 
+class PeerCounsellorAvailability(Base):
+    __tablename__ = "peer_counsellor_availability"
+    id = Column(Integer, primary_key=True, index=True)
+    counsellor_id = Column(Integer, ForeignKey("peer_counsellors.id"), nullable=False)
+    day_of_week = Column(String, nullable=False)  # e.g. "Monday"
+    start_time = Column(String, nullable=False)   # e.g. "09:00"
+    end_time = Column(String, nullable=False)     # e.g. "11:00"
 
+    counsellor = relationship("PeerCounsellor", back_populates="availabilities")
+    counsellor = relationship("PeerCounsellor", back_populates="availabilities")
+
+class PeerCounsellorBooking(Base):
+    __tablename__ = "peer_counsellor_bookings"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False)
+    user_email = Column(String, nullable=False)
+    counsellor_id = Column(Integer, ForeignKey("peer_counsellors.id"), nullable=False)
+    counsellor_email = Column(String, nullable=False)
+    slot_id = Column(Integer, ForeignKey("peer_counsellor_availability.id"), nullable=False)
+    slot_date = Column(DateTime, nullable=False)
+    payment_status = Column(String, default="pending")  # pending, paid, failed
+    meeting_link = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    counsellor = relationship("PeerCounsellor")
+    slot = relationship("PeerCounsellorAvailability")

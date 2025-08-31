@@ -95,3 +95,41 @@ def send_otp(email: str, code: str) -> bool:
     except (smtplib.SMTPException, OSError, socket.error) as e:
         logger.error("Failed sending OTP email to %s: %s", email, e)
         return not SMTP_STRICT
+
+def send_email(to_email: str, subject: str, message: str) -> bool:
+    """
+    Send a plain text email via SMTP.
+    Returns True if sent, False otherwise.
+    """
+    if SMTP_DISABLE:
+        logger.warning("[SMTP_DISABLED] Email for %s -> %s", to_email, subject)
+        return True
+
+    if not _smtp_config_complete():
+        logger.warning("[SMTP_FALLBACK] Incomplete SMTP config; email=%s subject=%s", to_email, subject)
+        return not SMTP_STRICT
+
+    diag = smtp_diagnostics()
+    if not diag.get("resolves"):
+        logger.error("SMTP host resolution failed: %s (email=%s)", SMTP_HOST, to_email)
+        return not SMTP_STRICT
+    if diag.get("can_connect") is False:
+        logger.error("SMTP host unreachable (port %s): %s (email=%s)", SMTP_PORT, SMTP_HOST, to_email)
+        return not SMTP_STRICT
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = SMTP_FROM
+    msg["To"] = to_email
+    msg.set_content(message)
+
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as smtp:
+            smtp.starttls()
+            smtp.login(SMTP_USER, SMTP_PASSWORD)
+            smtp.send_message(msg)
+        logger.info("Sent email to %s", to_email)
+        return True
+    except (smtplib.SMTPException, OSError, socket.error) as e:
+        logger.error("Failed sending email to %s: %s", to_email, e)
+        return not SMTP_STRICT
