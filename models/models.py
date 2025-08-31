@@ -316,7 +316,7 @@ class PeerCounsellorAvailability(Base):
 class PeerCounsellorBooking(Base):
     __tablename__ = "peer_counsellor_bookings"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, nullable=False)
+    user_id = Column(String, nullable=False)
     user_email = Column(String, nullable=False)
     counsellor_id = Column(Integer, ForeignKey("peer_counsellors.id"), nullable=False)
     counsellor_email = Column(String, nullable=False)
