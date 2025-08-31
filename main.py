@@ -497,33 +497,31 @@ def google_oauth_login(
 @app.get("/peer-counsellors/{counsellor_id}/available-slots", tags=["peer-counsellors"])
 def get_available_slots(
     counsellor_id: int,
-    db_session=Depends(get_db)
+    db_session=Depends(get_db),
+    days: int = Query(30, ge=1, le=60, description="Number of days to look ahead for available slots (default 30, max 60)")
 ):
-   
+    """
+    Returns available 30-min slots for the next `days` days (default 30) for a given peer counsellor,
+    excluding slots already booked for a specific date.
+    """
     db: Session
     with db_session as db:
-
         availabilities = db.query(PeerCounsellorAvailability).filter_by(counsellor_id=counsellor_id).all()
-
         now = datetime.utcnow()
-        week_later = now + timedelta(days=7)
+        end_date = now + timedelta(days=days)
         bookings = db.query(PeerCounsellorBooking).filter(
             PeerCounsellorBooking.counsellor_id == counsellor_id,
             PeerCounsellorBooking.slot_date >= now,
-            PeerCounsellorBooking.slot_date < week_later,
+            PeerCounsellorBooking.slot_date < end_date,
             PeerCounsellorBooking.payment_status == "paid"
         ).all()
-
         booked = set((b.slot_date.date(), b.slot_id) for b in bookings)
-
         result = []
-        for day_offset in range(7):
+        for day_offset in range(days):
             day = now.date() + timedelta(days=day_offset)
             weekday = day.strftime("%A")
             for av in availabilities:
                 if av.day_of_week == weekday:
-                    slot_start = datetime.combine(day, datetime.strptime(av.start_time, "%H:%M").time())
-                    slot_end = datetime.combine(day, datetime.strptime(av.end_time, "%H:%M").time())
                     if (day, av.id) not in booked:
                         result.append({
                             "slot_id": av.id,
@@ -654,7 +652,6 @@ def book_peer_counsellor_slot(
     db: Session
     with db_session as db:
         slot_date = datetime.fromisoformat(payload["slot_date"])
-        # Always prevent double booking for the same slot/date if any booking exists (pending or paid)
         existing_paid = db.query(PeerCounsellorBooking).filter_by(
             counsellor_id=payload["counsellor_id"],
             slot_id=payload["slot_id"],
@@ -664,7 +661,6 @@ def book_peer_counsellor_slot(
         if existing_paid:
             raise HTTPException(status_code=409, detail="Slot already booked and paid for this date/time")
 
-        # Prevent double payment for the same slot/date (even if pending)
         if payload.get("payment_status") == "paid":
             existing_any = db.query(PeerCounsellorBooking).filter_by(
                 counsellor_id=payload["counsellor_id"],
@@ -724,7 +720,7 @@ def confirm_peer_counsellor_payment(
             raise HTTPException(status_code=404, detail="Booking not found")
         if booking.payment_status == "paid":
             raise HTTPException(status_code=409, detail="Booking already marked as paid")
-        # Prevent double booking for the same slot/date
+
         existing_paid = db.query(PeerCounsellorBooking).filter(
             PeerCounsellorBooking.counsellor_id == booking.counsellor_id,
             PeerCounsellorBooking.slot_id == booking.slot_id,
@@ -791,4 +787,4 @@ def confirm_peer_counsellor_payment(
             "meeting_link": booking.meeting_link,
             "created_at": booking.created_at.isoformat()
         }
-
+          

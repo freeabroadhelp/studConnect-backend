@@ -23,7 +23,7 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
-        db.commit()  # commit changes for Neon visibility
+        db.commit()
     except Exception:
         db.rollback()
         raise
