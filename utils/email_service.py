@@ -9,7 +9,7 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 SMTP_FROM = os.getenv("SMTP_FROM") or SMTP_USER
-APP_NAME = os.getenv("APP_NAME", "StudConnect")
+APP_NAME = os.getenv("APP_NAME", "YourNextUniversity")
 SMTP_DISABLE = os.getenv("SMTP_DISABLE", "0") == "1"      # new: force-disable sending
 SMTP_STRICT = os.getenv("SMTP_STRICT", "0") == "1"        # new: raise on any failure (production)
 
