@@ -787,4 +787,62 @@ def confirm_peer_counsellor_payment(
             "meeting_link": booking.meeting_link,
             "created_at": booking.created_at.isoformat()
         }
-          
+
+@app.get("/peer-counsellors/bookings", tags=["peer-counsellors"])
+def list_peer_counsellor_bookings(
+    db_session=Depends(get_db),
+    current_user: UserOut = Depends(auth_user),
+    status_filter: Optional[str] = Query(None, description="Filter by payment status: pending, paid, failed"),
+    days_ahead: int = Query(30, ge=1, le=90, description="Number of days ahead to fetch bookings (default 30, max 90)")
+):
+   
+    db: Session
+    with db_session as db:
+        query = db.query(PeerCounsellorBooking)
+        
+        if current_user.role == "student":
+            query = query.filter(PeerCounsellorBooking.user_id == current_user.id)
+        elif current_user.role == "counsellor":
+            counsellor = db.query(PeerCounsellor).filter_by(email=current_user.email).first()
+            if counsellor:
+                query = query.filter(PeerCounsellorBooking.counsellor_id == counsellor.id)
+            else:
+                return [] 
+            
+            query = query.filter(PeerCounsellorBooking.payment_status == status_filter)
+        
+        now = datetime.utcnow()
+        end_date = now + timedelta(days=days_ahead)
+        query = query.filter(
+            PeerCounsellorBooking.slot_date >= now,
+            PeerCounsellorBooking.slot_date <= end_date
+        )
+        
+        query = query.order_by(PeerCounsellorBooking.slot_date)
+        
+        bookings = query.all()
+        
+        result = []
+        for booking in bookings:
+            availability = db.query(PeerCounsellorAvailability).filter_by(id=booking.slot_id).first()
+            counsellor = db.query(PeerCounsellor).filter_by(id=booking.counsellor_id).first()
+            
+            result.append({
+                "booking_id": booking.id,
+                "user_id": booking.user_id,
+                "user_email": booking.user_email,
+                "counsellor_id": booking.counsellor_id,
+                "counsellor_email": booking.counsellor_email,
+                "counsellor_name": counsellor.name if counsellor else None,
+                "slot_id": booking.slot_id,
+                "slot_date": booking.slot_date.isoformat(),
+                "slot_day": booking.slot_date.strftime("%A"),
+                "start_time": availability.start_time if availability else None,
+                "end_time": availability.end_time if availability else None,
+                "payment_status": booking.payment_status,
+                "meeting_link": booking.meeting_link,
+                "created_at": booking.created_at.isoformat(),
+                "charges": counsellor.charges if counsellor else None
+            })
+        
+        return result
