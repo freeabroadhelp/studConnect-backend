@@ -1023,7 +1023,7 @@ Dear {booking.user_email},
 
 Great news! Your payment has been successfully processed through Dodo Payments.
 
-📅 Session Details:
+Session Details:
 • Date & Time: {slot_time}
 • Counsellor: {booking.counsellor_email}
 • Meeting Link: {booking.meeting_link or 'Will be shared 15 minutes before the session'}
