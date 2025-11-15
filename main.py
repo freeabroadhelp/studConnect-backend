@@ -880,7 +880,7 @@ async def create_dodo_session(request: PaymentRequest):
         
         logging.info(f"Using Dodo API key: {DODO_API_KEY[:10]}...")
         
-        DODO_URL = "https://api.dodopayments.com/v1/checkout/sessions"
+        DODO_URL = "https://api.dodopayments.com/v1/checkout/session"
         
         payload = {
             "amount": int(request.amount * 100),  # Convert to smallest currency unit (paise)
