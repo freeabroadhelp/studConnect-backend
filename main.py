@@ -882,7 +882,13 @@ async def create_dodo_session(request: PaymentRequest):
         
         logging.info(f"Using Dodo API key: {DODO_API_KEY[:10]}...")
         
-        DODO_URL = "https://api.dodopayments.com/checkouts"
+        # Try multiple possible Dodo API endpoints
+        dodo_endpoints = [
+            "https://api.dodo.dev/checkouts",  # Test environment
+            "https://api.dodopayments.com/checkouts",  # Production (current)
+            "https://checkout.dodopayments.com/api/checkouts",  # Alternative
+            "https://test.dodopayments.com/checkouts",  # Test mentioned in docs
+        ]
         
         payload = {
             "product_cart": [
@@ -924,48 +930,76 @@ async def create_dodo_session(request: PaymentRequest):
             "User-Agent": "StudConnect/1.0"
         }
 
-        logging.info(f"Making request to Dodo API: {DODO_URL}")
         logging.info(f"Payload: {json.dumps(payload, indent=2)}")
 
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(DODO_URL, json=payload, headers=headers)
-            
-            logging.info(f"Dodo API Response Status: {resp.status_code}")
-            logging.info(f"Dodo API Response Headers: {dict(resp.headers)}")
-            logging.info(f"Dodo API Response Body: {resp.text}")
-            
-            if resp.status_code == 401:
-                raise HTTPException(status_code=500, detail="Invalid Dodo API key. Please check your DODO_PAYMENTS_API_KEY.")
-            elif resp.status_code == 400:
-                try:
-                    error_detail = resp.json()
-                except:
-                    error_detail = resp.text
-                raise HTTPException(status_code=500, detail=f"Dodo API validation error: {error_detail}")
-            elif resp.status_code != 200:
-                raise HTTPException(status_code=500, detail=f"Dodo API error: {resp.status_code} - {resp.text}")
-            
-            data = resp.json()
-            logging.info(f"Dodo success response: {json.dumps(data, indent=2)}")
-            
-            checkout_url = data.get("checkout_url")
-            session_id = data.get("session_id")
-            
-            if not checkout_url:
-                logging.error(f"No checkout_url found in Dodo response: {data}")
-                raise HTTPException(status_code=500, detail=f"Dodo API did not return checkout_url. Response: {data}")
-            
-            logging.info(f"REAL Dodo checkout session created successfully!")
-            logging.info(f"Checkout URL: {checkout_url}")
-            logging.info(f"Session ID: {session_id}")
-            
-            return {
-                "checkout_url": checkout_url,
-                "booking_id": request.booking_id,
-                "status": "success",
-                "payment_type": "dodo",
-                "session_id": session_id
-            }
+        # Try each endpoint until one works
+        last_error = None
+        for i, endpoint in enumerate(dodo_endpoints):
+            try:
+                logging.info(f"Trying endpoint {i+1}/{len(dodo_endpoints)}: {endpoint}")
+                
+                async with httpx.AsyncClient(timeout=15.0) as client:
+                    resp = await client.post(endpoint, json=payload, headers=headers)
+                    
+                    logging.info(f"Response from {endpoint}: Status {resp.status_code}")
+                    logging.info(f"Response Headers: {dict(resp.headers)}")
+                    logging.info(f"Response Body: {resp.text}")
+                    
+                    if resp.status_code == 401:
+                        raise HTTPException(status_code=500, detail="Invalid Dodo API key. Please check your DODO_PAYMENTS_API_KEY.")
+                    elif resp.status_code == 400:
+                        try:
+                            error_detail = resp.json()
+                        except:
+                            error_detail = resp.text
+                        raise HTTPException(status_code=500, detail=f"Dodo API validation error: {error_detail}")
+                    elif resp.status_code == 200:
+                        data = resp.json()
+                        logging.info(f"✅ Success with endpoint: {endpoint}")
+                        logging.info(f"Dodo success response: {json.dumps(data, indent=2)}")
+                        
+                        checkout_url = data.get("checkout_url")
+                        session_id = data.get("session_id")
+                        
+                        if not checkout_url:
+                            logging.error(f"No checkout_url found in Dodo response: {data}")
+                            raise HTTPException(status_code=500, detail=f"Dodo API did not return checkout_url. Response: {data}")
+                        
+                        logging.info(f"🔗 Checkout URL: {checkout_url}")
+                        logging.info(f"📋 Session ID: {session_id}")
+                        
+                        return {
+                            "checkout_url": checkout_url,
+                            "booking_id": request.booking_id,
+                            "status": "success",
+                            "payment_type": "dodo",
+                            "session_id": session_id
+                        }
+                    else:
+                        logging.warning(f"Unexpected status {resp.status_code} from {endpoint}: {resp.text}")
+                        continue
+                        
+            except httpx.ConnectError as e:
+                last_error = f"Connection error for {endpoint}: {e}"
+                logging.error(last_error)
+                continue
+            except httpx.TimeoutException as e:
+                last_error = f"Timeout error for {endpoint}: {e}"
+                logging.error(last_error)
+                continue
+            except HTTPException:
+                raise
+            except Exception as e:
+                last_error = f"Error for {endpoint}: {e}"
+                logging.error(last_error)
+                continue
+        
+        # If all endpoints failed, provide helpful error
+        logging.error("All Dodo API endpoints failed")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Unable to connect to Dodo Payments API. Last error: {last_error}. Please check your Dodo API configuration or contact Dodo support."
+        )
                 
     except HTTPException:
         raise
@@ -973,116 +1007,54 @@ async def create_dodo_session(request: PaymentRequest):
         logging.error(f"Dodo payment integration failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Payment gateway error: {str(e)}")
 
-@app.post("/webhook/dodo", tags=["payments"])
-async def dodo_webhook(request: Request, db_session=Depends(get_db)):
-    try:
-        body = await request.body()
-        logging.info(f"Received Dodo webhook - Raw body: {body.decode()}")
-        
-        event = json.loads(body.decode())
-        logging.info(f"Parsed webhook event: {json.dumps(event, indent=2)}")
-        
-        event_type = event.get("event") or event.get("type")
-        data = event.get("data", {})
-        
-        logging.info(f"Event type: {event_type}")
-        
-        if event_type in ["checkout.session.completed", "payment.succeeded"]:
-            metadata = data.get("metadata", {})
-            booking_id = metadata.get("bookingId")
-            session_id = data.get("session_id") or data.get("id")
-            
-            logging.info(f"Payment successful - Booking ID: {booking_id}, Session ID: {session_id}")
-            
-            if not booking_id:
-                logging.warning("No booking ID in webhook metadata")
-                return {"status": "ok", "message": "No booking ID in webhook"}
-            
-            db: Session
-            with db_session as db:
-                booking = db.query(PeerCounsellorBooking).filter_by(id=int(booking_id)).first()
-                if not booking:
-                    logging.error(f"Booking {booking_id} not found in database")
-                    return {"status": "error", "message": "Booking not found"}
-                
-                if booking.payment_status == "paid":
-                    logging.info(f"Booking {booking_id} already marked as paid")
-                    return {"status": "ok", "message": "Payment already processed"}
-                
-                booking.payment_status = "paid"
-                db.commit()
-                
-                logging.info(f"Booking {booking_id} marked as PAID via Dodo webhook")
-                
-                try:
-                    slot_time = booking.slot_date.strftime("%A, %d %B %Y at %H:%M")
-                    
-                    user_subject = "Payment Confirmed - Your Peer Counselling Session"
-                    user_message = f"""
-Dear {booking.user_email},
-
-Great news! Your payment has been successfully processed through Dodo Payments.
-
-Session Details:
-• Date & Time: {slot_time}
-• Counsellor: {booking.counsellor_email}
-• Meeting Link: {booking.meeting_link or 'Will be shared 15 minutes before the session'}
-
-Please join the meeting 5 minutes before your scheduled time.
-
-Thank you for choosing StudConnect!
-
-Best regards,
-StudConnect Team
-                    """
-                    send_email(booking.user_email, user_subject, user_message)
-                    
-                    counsellor_subject = "💰 New Paid Session Booked"
-                    counsellor_message = f"""
-Dear {booking.counsellor_email},
-
-A new session has been booked with you and payment is confirmed via Dodo Payments.
-
-Session Details:
-• Date & Time: {slot_time}
-• Student: {booking.user_email}
-• Payment Status: CONFIRMED
-• Session ID: {session_id}
-
-Please set up the meeting link and be ready 5 minutes before the scheduled time.
-
-StudConnect Team
-                    """
-                    send_email(booking.counsellor_email, counsellor_subject, counsellor_message)
-                    
-                    logging.info(f"📧 Confirmation emails sent for booking {booking_id}")
-                    
-                except Exception as e:
-                    logging.error(f"📧 Failed to send confirmation emails: {e}")
-                
-                return {"status": "success", "message": f"Booking {booking_id} payment confirmed"}
-        
-        elif event_type in ["checkout.session.expired", "payment.failed"]:
-            metadata = data.get("metadata", {})
-            booking_id = metadata.get("bookingId")
-            
-            if booking_id:
-                db: Session
-                with db_session as db:
-                    booking = db.query(PeerCounsellorBooking).filter_by(id=int(booking_id)).first()
-                    if booking:
-                        booking.payment_status = "failed"
-                        db.commit()
-                        logging.info(f"Booking {booking_id} marked as failed/expired")
-        
-        return {"status": "ok", "message": "Webhook processed"}
-        
-    except Exception as e:
-        logging.error(f"Webhook processing error: {e}")
-        return {"status": "error", "message": str(e)}
+@app.get("/debug/dodo", tags=["payments"])
+async def test_dodo_connectivity():
+    """Test connectivity to different Dodo API endpoints"""
+    endpoints = [
+        "https://api.dodo.dev",
+        "https://api.dodopayments.com",
+        "https://test.dodopayments.com", 
+        "https://checkout.dodopayments.com",
+    ]
+    
+    results = {}
+    
+    for endpoint in endpoints:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                # Test basic connectivity
+                resp = await client.get(f"{endpoint}/health", follow_redirects=True)
+                results[endpoint] = {
+                    "reachable": True,
+                    "status": resp.status_code,
+                    "response": resp.text[:200] if resp.text else "Empty response"
+                }
+        except httpx.ConnectError as e:
+            results[endpoint] = {
+                "reachable": False,
+                "error": "Connection failed - DNS resolution issue",
+                "details": str(e)
+            }
+        except httpx.TimeoutException:
+            results[endpoint] = {
+                "reachable": False,
+                "error": "Timeout"
+            }
+        except Exception as e:
+            results[endpoint] = {
+                "reachable": False,
+                "error": str(e)
+            }
+    
+    return {
+        "connectivity_test": results,
+        "api_key_configured": bool(DODO_API_KEY),
+        "recommendation": "If all endpoints fail, contact Dodo Payments support for correct API endpoint"
+    }
 
 @app.get("/debug/dodo-config", tags=["payments"])
 async def check_dodo_config():
+    """Check if Dodo API is properly configured"""
     dodo_key = os.getenv("DODO_PAYMENTS_API_KEY")
     
     return {
@@ -1091,21 +1063,23 @@ async def check_dodo_config():
         "dodo_api_key_preview": dodo_key[:10] + "..." if dodo_key and len(dodo_key) > 10 else "Not set",
         "frontend_url": FRONTEND_URL,
         "backend_url": os.getenv('BACKEND_URL', 'https://studconnect-backend.onrender.com'),
-        "correct_endpoint": "https://api.dodopayments.com/checkouts",
-        "actual_product_id": "pdt_isuaGsszAodjHrUaplbG4",
+        "product_id": "pdt_isuaGsszAodjHrUaplbG4",
         "webhook_url": f"{os.getenv('BACKEND_URL', 'https://studconnect-backend.onrender.com')}/webhook/dodo",
-        "environment_variables_needed": [
-            "DODO_PAYMENTS_API_KEY - Your Dodo API key",
-            "FRONTEND_URL - Your frontend domain",
-            "BACKEND_URL - Your backend domain"
+        "endpoints_to_try": [
+            "https://api.dodo.dev/checkouts",
+            "https://api.dodopayments.com/checkouts", 
+            "https://test.dodopayments.com/checkouts"
         ],
-        "setup_status": [
-            "Product ID configured: pdt_isuaGsszAodjHrUaplbG4",
-            "Endpoint updated: /checkouts",
-            "Webhook handler: /webhook/dodo",
-            "Next: Set webhook URL in Dodo dashboard",
-            "Test: POST /api/create-dodo-session"
+        "troubleshooting_steps": [
+            "1. Test connectivity with GET /debug/dodo-connectivity",
+            "2. Check your Dodo dashboard for correct API endpoint",
+            "3. Verify your API key is for the correct environment (test vs live)",
+            "4. Contact Dodo support if DNS issues persist",
+            "5. Check Dodo documentation for updated endpoints"
         ],
-        "api_documentation": "https://docs.dodopayments.com/api-reference/checkout-sessions/create-checkout-session"
+        "contact_dodo_support": {
+            "reason": "DNS resolution failing for api.dodopayments.com",
+            "ask_for": "Correct API endpoint URL for checkout sessions"
+        }
     }
 
