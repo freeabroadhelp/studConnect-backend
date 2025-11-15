@@ -868,33 +868,17 @@ async def create_dodo_session(request: PaymentRequest):
     if not DODO_API_KEY:
         raise HTTPException(status_code=500, detail="DODO_API_KEY not configured")
     
-    url = "https://api.dodopayments.com/v1/sessions"
-    payload = {
-        "amount": int(request.amount * 100),  # Convert INR to paisa
-        "currency": "INR",
-        "customer": request.customer.dict(),
-        "product": {
-            "name": "Peer Counseling Session",
-            "description": f"Booking ID: {request.booking_id}"
-        },
-        "success_url": f"https://yourfrontend.com/payment-success?bookingId={request.booking_id}",
-        "cancel_url": f"https://yourfrontend.com/payment-cancel?bookingId={request.booking_id}",
-        "metadata": {"bookingId": request.booking_id}
-    }
-    headers = {
-        "Authorization": f"Bearer {DODO_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    async with httpx.AsyncClient() as client:
-        try:
-            resp = await client.post(url, json=payload, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
-            return {"checkout_url": data.get("checkout_url")}
-        except httpx.HTTPError as e:
-            logging.error(f"Dodo API error: {e}")
-            raise HTTPException(status_code=500, detail="Failed to create Dodo payment session")
+    
+    try:
+        mock_checkout_url = f"https://checkout.dodopayments.com/session?booking_id={request.booking_id}&amount={request.amount}"
+        
+        logging.info(f"Mock Dodo session created for booking {request.booking_id}, amount: {request.amount}")
+        
+        return {"checkout_url": mock_checkout_url}
+        
+    except Exception as e:
+        logging.error(f"Error creating Dodo session: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create payment session")
 
 @app.post("/webhook/dodo", tags=["payments"])
 async def dodo_webhook(request: Request, db_session=Depends(get_db)):
