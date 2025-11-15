@@ -864,6 +864,8 @@ class PaymentRequest(BaseModel):
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
+DODO_API_KEY = os.getenv("DODO_PAYMENTS_API_KEY")
+
 @app.post("/api/create-dodo-session", tags=["payments"])
 async def create_dodo_session(request: PaymentRequest):
     try:
@@ -875,38 +877,46 @@ async def create_dodo_session(request: PaymentRequest):
         if not request.customer.email or not request.customer.name:
             raise HTTPException(status_code=400, detail="Customer email and name are required")
         
-        if not DODO_API_KEY or len(DODO_API_KEY.strip()) < 10:
-            raise HTTPException(status_code=500, detail="Dodo API key not configured. Please set DODO_API_KEY environment variable.")
+        DODO_PAYMENTS_API_KEY = os.getenv("DODO_PAYMENTS_API_KEY")
+        if not DODO_PAYMENTS_API_KEY or len(DODO_PAYMENTS_API_KEY.strip()) < 10:
+            raise HTTPException(status_code=500, detail="Dodo API key not configured. Please set DODO_PAYMENTS_API_KEY environment variable.")
         
-        logging.info(f"Using Dodo API key: {DODO_API_KEY[:10]}...")
+        logging.info(f"Using Dodo API key: {DODO_PAYMENTS_API_KEY[:10]}...")
         
-        DODO_URL = "https://api.dodopayments.com/v1/checkout/session"
+        DODO_URL = "https://api.dodopayments.com/payments"
         
         payload = {
-            "amount": int(request.amount * 100),  # Convert to smallest currency unit (paise)
-            "currency": "INR",
+            "payment_link": True,
+            "billing": {
+                "city": "Mumbai",
+                "country": "IN",
+                "state": "Maharashtra", 
+                "street": "Online Service",
+                "zipcode": 400001
+            },
             "customer": {
-                "name": request.customer.name,
                 "email": request.customer.email,
-                "phone": request.customer.phone or ""
+                "name": request.customer.name
             },
-            "product": {
-                "name": "Peer Counselling Session",
-                "description": f"StudConnect Peer Counselling - Booking #{request.booking_id}",
-                "image": "https://yournextuniversity.com/logo.png"  # Optional
-            },
-            "success_url": f"{FRONTEND_URL}/payment-success?bookingId={request.booking_id}",
-            "cancel_url": f"{FRONTEND_URL}/payment-cancel?bookingId={request.booking_id}",
-            "webhook_url": f"{os.getenv('BACKEND_URL', 'https://studconnect-backend.onrender.com')}/webhook/dodo",
+            "product_cart": [
+                {
+                    "product_id": "peer_counselling_session",
+                    "quantity": 1
+                }
+            ],
+            "billing_currency": "INR",
+            "return_url": f"{FRONTEND_URL}/payment-success?bookingId={request.booking_id}",
             "metadata": {
-                "bookingId": request.booking_id,
+                "bookingId": str(request.booking_id),
                 "service": "peer_counselling",
-                "platform": "studconnect"
+                "platform": "studconnect",
+                "amount": str(request.amount),
+                "customer_phone": request.customer.phone or ""
             }
         }
 
         headers = {
-            "Authorization": f"Bearer {DODO_API_KEY}",
+            "Authorization": f"Bearer {DODO_PAYMENTS_API_KEY}",
             "Content-Type": "application/json",
             "User-Agent": "StudConnect/1.0"
         }
@@ -922,9 +932,12 @@ async def create_dodo_session(request: PaymentRequest):
             logging.info(f"Dodo API Response Body: {resp.text}")
             
             if resp.status_code == 401:
-                raise HTTPException(status_code=500, detail="Invalid Dodo API key. Please check your DODO_API_KEY.")
+                raise HTTPException(status_code=500, detail="Invalid Dodo API key. Please check your DODO_PAYMENTS_API_KEY.")
             elif resp.status_code == 400:
-                error_detail = resp.json() if resp.headers.get('content-type', '').startswith('application/json') else resp.text
+                try:
+                    error_detail = resp.json()
+                except:
+                    error_detail = resp.text
                 raise HTTPException(status_code=500, detail=f"Dodo API validation error: {error_detail}")
             elif resp.status_code != 200:
                 raise HTTPException(status_code=500, detail=f"Dodo API error: {resp.status_code} - {resp.text}")
@@ -932,28 +945,22 @@ async def create_dodo_session(request: PaymentRequest):
             data = resp.json()
             logging.info(f"Dodo success response: {json.dumps(data, indent=2)}")
             
-            # Extract checkout URL from response
-            checkout_url = (
-                data.get("checkout_url") or 
-                data.get("url") or 
-                data.get("payment_url") or 
-                data.get("hosted_checkout_url") or
-                data.get("redirect_url")
-            )
+            payment_link = data.get("payment_link")
+            client_secret = data.get("client_secret")
             
-            if not checkout_url:
-                logging.error(f"No checkout URL found in Dodo response: {data}")
-                raise HTTPException(status_code=500, detail=f"Dodo API did not return checkout URL. Response: {data}")
+            if not payment_link:
+                logging.error(f"No payment_link found in Dodo response: {data}")
+                raise HTTPException(status_code=500, detail=f"Dodo API did not return payment_link. Response: {data}")
             
-            logging.info(f"REAL Dodo session created successfully!")
-            logging.info(f"Checkout URL: {checkout_url}")
+            logging.info(f"REAL Dodo payment created successfully!")
+            logging.info(f"Payment Link: {payment_link}")
             
             return {
-                "checkout_url": checkout_url,
+                "checkout_url": payment_link,
                 "booking_id": request.booking_id,
                 "status": "success",
                 "payment_type": "dodo",
-                "session_id": data.get("id") or data.get("session_id")
+                "client_secret": client_secret
             }
                 
     except HTTPException:
@@ -964,136 +971,25 @@ async def create_dodo_session(request: PaymentRequest):
 
 @app.get("/debug/dodo-config", tags=["payments"])
 async def check_dodo_config():
-    """Check if Dodo API is properly configured"""
+    dodo_key = os.getenv("DODO_PAYMENTS_API_KEY")
     return {
-        "dodo_api_key_configured": bool(DODO_API_KEY),
-        "dodo_api_key_length": len(DODO_API_KEY) if DODO_API_KEY else 0,
-        "dodo_api_key_preview": DODO_API_KEY[:10] + "..." if DODO_API_KEY and len(DODO_API_KEY) > 10 else "Not set",
+        "dodo_api_key_configured": bool(dodo_key),
+        "dodo_api_key_length": len(dodo_key) if dodo_key else 0,
+        "dodo_api_key_preview": dodo_key[:10] + "..." if dodo_key and len(dodo_key) > 10 else "Not set",
         "frontend_url": FRONTEND_URL,
         "backend_url": os.getenv('BACKEND_URL', 'https://studconnect-backend.onrender.com'),
-        "recommended_endpoint": "https://api.dodopayments.com/v1/checkout/sessions"
+        "correct_endpoint": "https://api.dodopayments.com/payments",
+        "required_product_id": "peer_counselling_session",
+        "environment_variables_needed": [
+            "DODO_PAYMENTS_API_KEY",
+            "FRONTEND_URL", 
+            "BACKEND_URL"
+        ],
+        "next_steps": [
+            "1. Create product 'peer_counselling_session' in Dodo dashboard with price ₹800",
+            "2. Set webhook URL: https://studconnect-backend.onrender.com/webhook/dodo",
+            "3. Test with /api/create-dodo-session endpoint"
+        ]
     }
-
-@app.post("/webhook/dodo", tags=["payments"])
-async def dodo_webhook(request: Request, db_session=Depends(get_db)):
-    try:
-        body = await request.body()
-        logging.info(f"🔔 Received Dodo webhook - Raw body: {body.decode()}")
-        
-        event = json.loads(body.decode())
-        logging.info(f"Parsed webhook event: {json.dumps(event, indent=2)}")
-        
-        event_type = event.get("type") or event.get("event")
-        payment_id = event.get("payment_id") or event.get("id")
-        
-        logging.info(f"Event type: {event_type}, Payment ID: {payment_id}")
-        
-        if event_type in ["payment.completed", "payment.succeeded", "checkout.session.completed"]:
-            # Payment was successful
-            metadata = event.get("metadata", {})
-            booking_id = metadata.get("bookingId")
-            
-            if not booking_id:
-                logging.warning("No booking ID in webhook metadata")
-                return {"status": "ok", "message": "No booking ID in webhook"}
-            
-            db: Session
-            with db_session as db:
-                booking = db.query(PeerCounsellorBooking).filter_by(id=int(booking_id)).first()
-                if not booking:
-                    logging.error(f"Booking {booking_id} not found in database")
-                    return {"status": "error", "message": "Booking not found"}
-                
-                if booking.payment_status == "paid":
-                    logging.info(f"Booking {booking_id} already marked as paid")
-                    return {"status": "ok", "message": "Payment already processed"}
-                
-                # Update booking status to paid
-                booking.payment_status = "paid"
-                db.commit()
-                
-                logging.info(f"Booking {booking_id} marked as PAID via Dodo webhook")
-                
-                try:
-                    slot_time = booking.slot_date.strftime("%A, %d %B %Y at %H:%M")
-                    
-                    user_subject = "Payment Confirmed - Your Peer Counselling Session"
-                    user_message = f"""
-Dear {booking.user_email},
-
-Great news! Your payment has been successfully processed.
-
-📅 Session Details:
-• Date & Time: {slot_time}
-• Counsellor: {booking.counsellor_email}
-• Meeting Link: {booking.meeting_link or 'Will be shared 15 minutes before the session'}
-
-Please join the meeting 5 minutes before your scheduled time.
-
-Thank you for choosing StudConnect!
-
-Best regards,
-StudConnect Team
-                    """
-                    send_email(booking.user_email, user_subject, user_message)
-                    
-                    # Email to counsellor
-                    counsellor_subject = "💰 New Paid Session Booked"
-                    counsellor_message = f"""
-Dear {booking.counsellor_email},
-
-A new session has been booked with you and payment is confirmed.
-
-📅 Session Details:
-• Date & Time: {slot_time}
-• Student: {booking.user_email}
-• Payment Status: CONFIRMED
-
-Please set up the meeting link and be ready 5 minutes before the scheduled time.
-
-StudConnect Team
-                    """
-                    send_email(booking.counsellor_email, counsellor_subject, counsellor_message)
-                    
-                    logging.info(f"📧 Confirmation emails sent for booking {booking_id}")
-                    
-                except Exception as e:
-                    logging.error(f"📧 Failed to send confirmation emails: {e}")
-                
-                return {"status": "success", "message": f"Booking {booking_id} payment confirmed"}
-        
-        elif event_type in ["payment.failed", "payment.cancelled", "checkout.session.expired"]:
-            metadata = event.get("metadata", {})
-            booking_id = metadata.get("bookingId")
-            
-            if booking_id:
-                db: Session
-                with db_session as db:
-                    booking = db.query(PeerCounsellorBooking).filter_by(id=int(booking_id)).first()
-                    if booking:
-                        booking.payment_status = "failed"
-                        db.commit()
-                        logging.info(f"Booking {booking_id} marked as failed/cancelled")
-        
-        return {"status": "ok", "message": "Webhook processed"}
-        
-    except Exception as e:
-        logging.error(f"Webhook processing error: {e}")
-        return {"status": "error", "message": str(e)}
-
-@app.get("/debug/payment/{booking_id}", tags=["payments"])
-def debug_payment_status(booking_id: str, db_session=Depends(get_db)):
-    db: Session
-    with db_session as db:
-        booking = db.query(PeerCounsellorBooking).filter_by(id=int(booking_id)).first()
-        if not booking:
-            return {"error": "Booking not found"}
-        return {
-            "booking_id": booking.id,
-            "payment_status": booking.payment_status,
-            "user_email": booking.user_email,
-            "amount": "Check counsellor charges",
-            "slot_date": booking.slot_date.isoformat()
-        }
 
 
