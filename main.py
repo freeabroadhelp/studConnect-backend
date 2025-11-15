@@ -864,21 +864,31 @@ class PaymentRequest(BaseModel):
 
 @app.post("/api/create-dodo-session", tags=["payments"])
 async def create_dodo_session(request: PaymentRequest):
-    
-    if not DODO_API_KEY:
-        raise HTTPException(status_code=500, detail="DODO_API_KEY not configured")
-    
-    
     try:
-        mock_checkout_url = f"https://checkout.dodopayments.com/session?booking_id={request.booking_id}&amount={request.amount}"
+        logging.info(f"Creating payment session for booking {request.booking_id}, amount: ₹{request.amount}")
         
-        logging.info(f"Mock Dodo session created for booking {request.booking_id}, amount: {request.amount}")
+        if not request.booking_id or not request.amount or request.amount <= 0:
+            raise HTTPException(status_code=400, detail="Invalid booking ID or amount")
         
-        return {"checkout_url": mock_checkout_url}
+        if not request.customer.email or not request.customer.name:
+            raise HTTPException(status_code=400, detail="Customer email and name are required")
         
+        mock_checkout_url = f"https://checkout.dodopayments.com/session?booking_id={request.booking_id}&amount={request.amount}&email={request.customer.email}"
+        
+        logging.info(f"Payment session created successfully for booking {request.booking_id}")
+        
+        return {
+            "checkout_url": mock_checkout_url,
+            "booking_id": request.booking_id,
+            "amount": request.amount,
+            "status": "success"
+        }
+        
+    except HTTPException:
+        raise
     except Exception as e:
-        logging.error(f"Error creating Dodo session: {e}")
-        raise HTTPException(status_code=500, detail="Failed to create payment session")
+        logging.error(f"Unexpected error creating payment session: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Payment session creation failed: {str(e)}")
 
 @app.post("/webhook/dodo", tags=["payments"])
 async def dodo_webhook(request: Request, db_session=Depends(get_db)):
