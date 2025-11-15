@@ -862,10 +862,12 @@ class PaymentRequest(BaseModel):
     customer: Customer
     booking_id: str
 
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
 @app.post("/api/create-dodo-session", tags=["payments"])
 async def create_dodo_session(request: PaymentRequest):
     try:
-        logging.info(f"Creating payment session for booking {request.booking_id}, amount: ₹{request.amount}")
+        logging.info(f"Creating REAL Dodo session for booking {request.booking_id}. Amount: ₹{request.amount}")
         
         if not request.booking_id or not request.amount or request.amount <= 0:
             raise HTTPException(status_code=400, detail="Invalid booking ID or amount")
@@ -873,22 +875,103 @@ async def create_dodo_session(request: PaymentRequest):
         if not request.customer.email or not request.customer.name:
             raise HTTPException(status_code=400, detail="Customer email and name are required")
         
-        mock_checkout_url = f"https://checkout.dodopayments.com/session?booking_id={request.booking_id}&amount={request.amount}&email={request.customer.email}"
-        
-        logging.info(f"Payment session created successfully for booking {request.booking_id}")
-        
-        return {
-            "checkout_url": mock_checkout_url,
-            "booking_id": request.booking_id,
-            "amount": request.amount,
-            "status": "success"
+        if not DODO_API_KEY:
+            raise HTTPException(status_code=500, detail="DODO_API_KEY not configured")
+
+        DODO_URL = "https://api.dodopayments.com/v1/sessions"
+
+        payload = {
+            "amount": int(request.amount * 100),
+            "currency": "INR",
+            "customer": {
+                "name": request.customer.name,
+                "email": request.customer.email,
+                "phone": request.customer.phone
+            },
+            "product": {
+                "name": "Peer Counselling Session",
+                "description": f"Booking #{request.booking_id}"
+            },
+            "success_url": f"{FRONTEND_URL}/payment-success?bookingId={request.booking_id}",
+            "cancel_url": f"{FRONTEND_URL}/payment-cancel?bookingId={request.booking_id}",
+            "metadata": {"bookingId": request.booking_id}
         }
-        
+
+        headers = {
+            "Authorization": f"Bearer {DODO_API_KEY}",
+            "Content-Type": "application/json"
+        }
+
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(DODO_URL, json=payload, headers=headers)
+            logging.info(f"Dodo response: {resp.status_code} {resp.text}")
+
+            if resp.status_code != 200:
+                raise HTTPException(status_code=500, detail=f"Dodo error: {resp.text}")
+
+            data = resp.json()
+            checkout_url = data.get("checkout_url")
+
+            if not checkout_url:
+                raise HTTPException(status_code=500, detail="Dodo did not return a checkout URL")
+
+            logging.info(f"REAL Dodo session created successfully for booking {request.booking_id}")
+            return {"checkout_url": checkout_url, "booking_id": request.booking_id, "status": "success"}
+
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"Unexpected error creating payment session: {str(e)}")
+        logging.error(f"Dodo payment error: {e}")
         raise HTTPException(status_code=500, detail=f"Payment session creation failed: {str(e)}")
+
+@app.post("/api/mock-payment-success", tags=["payments"])
+async def mock_payment_success(
+    booking_id: str = Body(...),
+    db_session=Depends(get_db)
+):
+    try:
+        db: Session
+        with db_session as db:
+            booking = db.query(PeerCounsellorBooking).filter_by(id=int(booking_id)).first()
+            if not booking:
+                raise HTTPException(status_code=404, detail="Booking not found")
+            
+            booking.payment_status = "paid"
+            db.commit()
+            logging.info(f"Booking {booking_id} marked as paid via mock payment")
+            
+            try:
+                slot_time = booking.slot_date.strftime("%A, %d %B %Y at %H:%M")
+                
+                user_subject = "Your Peer Counselling Session is Confirmed"
+                user_message = (
+                    f"Dear {booking.user_email},\n\n"
+                    f"Your session with peer counsellor ({booking.counsellor_email}) has been booked.\n"
+                    f"Date & Time: {slot_time}\n"
+                    f"Meeting Link: {booking.meeting_link or 'Will be shared soon'}\n\n"
+                    f"Please join the meeting 5 minutes prior to your scheduled time.\n\n"
+                    f"Thank you for booking with us!\n"
+                )
+                send_email(booking.user_email, user_subject, user_message)
+                
+                counsellor_subject = "A Session Has Been Booked With You"
+                counsellor_message = (
+                    f"Dear {booking.counsellor_email},\n\n"
+                    f"A student ({booking.user_email}) has booked a session with you.\n"
+                    f"Date & Time: {slot_time}\n"
+                    f"Meeting Link: {booking.meeting_link or 'Will be shared soon'}\n\n"
+                    f"Please be ready and join the meeting 5 minutes prior to the scheduled time.\n\n"
+                    f"Thank you for supporting students!\n"
+                )
+                send_email(booking.counsellor_email, counsellor_subject, counsellor_message)
+            except Exception as e:
+                logging.error(f"Failed to send confirmation emails: {e}")
+            
+            return {"status": "success", "booking_id": booking_id, "message": "Payment confirmed"}
+            
+    except Exception as e:
+        logging.error(f"Mock payment error: {e}")
+        raise HTTPException(status_code=500, detail="Payment confirmation failed")
 
 @app.post("/webhook/dodo", tags=["payments"])
 async def dodo_webhook(request: Request, db_session=Depends(get_db)):
@@ -937,3 +1020,5 @@ async def dodo_webhook(request: Request, db_session=Depends(get_db)):
     except Exception as e:
         logging.error(f"Dodo webhook error: {e}")
         raise HTTPException(status_code=400, detail="Invalid webhook")
+
+
