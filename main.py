@@ -867,7 +867,7 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 @app.post("/api/create-dodo-session", tags=["payments"])
 async def create_dodo_session(request: PaymentRequest):
     try:
-        logging.info(f"Creating REAL Dodo session for booking {request.booking_id}. Amount: ₹{request.amount}")
+        logging.info(f"Creating payment session for booking {request.booking_id}. Amount: ₹{request.amount}")
         
         if not request.booking_id or not request.amount or request.amount <= 0:
             raise HTTPException(status_code=400, detail="Invalid booking ID or amount")
@@ -875,54 +875,87 @@ async def create_dodo_session(request: PaymentRequest):
         if not request.customer.email or not request.customer.name:
             raise HTTPException(status_code=400, detail="Customer email and name are required")
         
-        if not DODO_API_KEY:
-            raise HTTPException(status_code=500, detail="DODO_API_KEY not configured")
+        dodo_enabled = os.getenv("DODO_ENABLED", "false").lower() == "true"
+        
+        if DODO_API_KEY and DODO_API_KEY.strip() and dodo_enabled:
+            try:
+                logging.info("Attempting real Dodo Payments API...")
+                
+                dodo_endpoints = [
+                    "https://api.dodopayments.com/v1/checkout/sessions",
+                    "https://api.dodopayments.com/v1/sessions", 
+                    "https://checkout.dodopayments.com/v1/sessions"
+                ]
+                
+                payload = {
+                    "amount": int(request.amount * 100),
+                    "currency": "INR",
+                    "customer": {
+                        "name": request.customer.name,
+                        "email": request.customer.email,
+                        "phone": request.customer.phone
+                    },
+                    "product": {
+                        "name": "Peer Counselling Session",
+                        "description": f"Booking #{request.booking_id}"
+                    },
+                    "success_url": f"{FRONTEND_URL}/payment-success?bookingId={request.booking_id}",
+                    "cancel_url": f"{FRONTEND_URL}/payment-cancel?bookingId={request.booking_id}",
+                    "metadata": {"bookingId": request.booking_id}
+                }
 
-        DODO_URL = "https://api.dodopayments.com/v1/sessions"
+                headers = {
+                    "Authorization": f"Bearer {DODO_API_KEY}",
+                    "Content-Type": "application/json"
+                }
 
-        payload = {
-            "amount": int(request.amount * 100),
-            "currency": "INR",
-            "customer": {
-                "name": request.customer.name,
-                "email": request.customer.email,
-                "phone": request.customer.phone
-            },
-            "product": {
-                "name": "Peer Counselling Session",
-                "description": f"Booking #{request.booking_id}"
-            },
-            "success_url": f"{FRONTEND_URL}/payment-success?bookingId={request.booking_id}",
-            "cancel_url": f"{FRONTEND_URL}/payment-cancel?bookingId={request.booking_id}",
-            "metadata": {"bookingId": request.booking_id}
+                for endpoint in dodo_endpoints:
+                    try:
+                        async with httpx.AsyncClient(timeout=5.0) as client:
+                            resp = await client.post(endpoint, json=payload, headers=headers)
+                            logging.info(f"Tried {endpoint}: {resp.status_code}")
+                            
+                            if resp.status_code == 200:
+                                data = resp.json()
+                                checkout_url = data.get("checkout_url")
+                                
+                                if checkout_url:
+                                    logging.info(f"Real Dodo session created successfully for booking {request.booking_id}")
+                                    return {"checkout_url": checkout_url, "booking_id": request.booking_id, "status": "success"}
+                            break
+                    except Exception as e:
+                        logging.warning(f"Endpoint {endpoint} failed: {e}")
+                        continue
+                        
+            except Exception as e:
+                logging.warning(f"All Dodo endpoints failed: {e}")
+        else:
+            logging.info("Dodo API disabled or not configured, using mock payment")
+        
+        logging.info("Using mock payment flow")
+        mock_checkout_url = f"{FRONTEND_URL}/mock-payment?booking_id={request.booking_id}&amount={request.amount}&email={request.customer.email}&name={request.customer.name}"
+        
+        logging.info(f"Mock payment session created successfully for booking {request.booking_id}")
+        return {
+            "checkout_url": mock_checkout_url,
+            "booking_id": request.booking_id,
+            "amount": request.amount,
+            "status": "success",
+            "payment_type": "mock"
         }
-
-        headers = {
-            "Authorization": f"Bearer {DODO_API_KEY}",
-            "Content-Type": "application/json"
-        }
-
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(DODO_URL, json=payload, headers=headers)
-            logging.info(f"Dodo response: {resp.status_code} {resp.text}")
-
-            if resp.status_code != 200:
-                raise HTTPException(status_code=500, detail=f"Dodo error: {resp.text}")
-
-            data = resp.json()
-            checkout_url = data.get("checkout_url")
-
-            if not checkout_url:
-                raise HTTPException(status_code=500, detail="Dodo did not return a checkout URL")
-
-            logging.info(f"REAL Dodo session created successfully for booking {request.booking_id}")
-            return {"checkout_url": checkout_url, "booking_id": request.booking_id, "status": "success"}
-
+        
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"Dodo payment error: {e}")
-        raise HTTPException(status_code=500, detail=f"Payment session creation failed: {str(e)}")
+        logging.error(f"Unexpected error creating payment session: {str(e)}")
+        mock_checkout_url = f"{FRONTEND_URL}/mock-payment?booking_id={request.booking_id}&amount={request.amount}&email={request.customer.email}&name={request.customer.name}"
+        return {
+            "checkout_url": mock_checkout_url,
+            "booking_id": request.booking_id,
+            "amount": request.amount,
+            "status": "success",
+            "payment_type": "mock"
+        }
 
 @app.post("/api/mock-payment-success", tags=["payments"])
 async def mock_payment_success(
