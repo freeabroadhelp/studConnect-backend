@@ -875,7 +875,7 @@ async def create_dodo_session(request: PaymentRequest):
         if not request.customer.email or not request.customer.name:
             raise HTTPException(status_code=400, detail="Customer email and name are required")
         
-        dodo_enabled = os.getenv("DODO_ENABLED", "false").lower() == "true"
+        dodo_enabled = os.getenv("DODO_ENABLED", "true").lower() == "true"
         
         if DODO_API_KEY and DODO_API_KEY.strip() and dodo_enabled:
             try:
