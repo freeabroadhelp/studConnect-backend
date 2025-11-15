@@ -846,3 +846,100 @@ def list_peer_counsellor_bookings(
             })
         
         return result
+
+import httpx
+from pydantic import BaseModel
+
+DODO_API_KEY = os.getenv("DODO_API_KEY")
+
+class Customer(BaseModel):
+    name: str
+    email: str
+    phone: str = None
+
+class PaymentRequest(BaseModel):
+    amount: float
+    customer: Customer
+    booking_id: str
+
+@app.post("/api/create-dodo-session", tags=["payments"])
+async def create_dodo_session(request: PaymentRequest):
+    
+    if not DODO_API_KEY:
+        raise HTTPException(status_code=500, detail="DODO_API_KEY not configured")
+    
+    url = "https://api.dodopayments.com/v1/sessions"
+    payload = {
+        "amount": int(request.amount * 100),  # Convert INR to paisa
+        "currency": "INR",
+        "customer": request.customer.dict(),
+        "product": {
+            "name": "Peer Counseling Session",
+            "description": f"Booking ID: {request.booking_id}"
+        },
+        "success_url": f"https://yourfrontend.com/payment-success?bookingId={request.booking_id}",
+        "cancel_url": f"https://yourfrontend.com/payment-cancel?bookingId={request.booking_id}",
+        "metadata": {"bookingId": request.booking_id}
+    }
+    headers = {
+        "Authorization": f"Bearer {DODO_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(url, json=payload, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+            return {"checkout_url": data.get("checkout_url")}
+        except httpx.HTTPError as e:
+            logging.error(f"Dodo API error: {e}")
+            raise HTTPException(status_code=500, detail="Failed to create Dodo payment session")
+
+@app.post("/webhook/dodo", tags=["payments"])
+async def dodo_webhook(request: Request, db_session=Depends(get_db)):
+    
+    try:
+        event = await request.json()
+        if event.get("type") == "payment_success":
+            booking_id = event.get("metadata", {}).get("bookingId")
+            if booking_id:
+                db: Session
+                with db_session as db:
+                    booking = db.query(PeerCounsellorBooking).filter_by(id=int(booking_id)).first()
+                    if booking:
+                        booking.payment_status = "paid"
+                        db.commit()
+                        logging.info(f"Booking {booking_id} marked as paid via Dodo webhook")
+                        
+                        try:
+                            slot_time = booking.slot_date.strftime("%A, %d %B %Y at %H:%M")
+                            
+                            user_subject = "Your Peer Counselling Session is Confirmed"
+                            user_message = (
+                                f"Dear {booking.user_email},\n\n"
+                                f"Your session with peer counsellor ({booking.counsellor_email}) has been booked.\n"
+                                f"Date & Time: {slot_time}\n"
+                                f"Meeting Link: {booking.meeting_link or 'Will be shared soon'}\n\n"
+                                f"Please join the meeting 5 minutes prior to your scheduled time.\n\n"
+                                f"Thank you for booking with us!\n"
+                            )
+                            send_email(booking.user_email, user_subject, user_message)
+                            
+                            counsellor_subject = "A Session Has Been Booked With You"
+                            counsellor_message = (
+                                f"Dear {booking.counsellor_email},\n\n"
+                                f"A student ({booking.user_email}) has booked a session with you.\n"
+                                f"Date & Time: {slot_time}\n"
+                                f"Meeting Link: {booking.meeting_link or 'Will be shared soon'}\n\n"
+                                f"Please be ready and join the meeting 5 minutes prior to the scheduled time.\n\n"
+                                f"Thank you for supporting students!\n"
+                            )
+                            send_email(booking.counsellor_email, counsellor_subject, counsellor_message)
+                        except Exception as e:
+                            logging.error(f"Failed to send confirmation emails: {e}")
+        
+        return {"status": "ok"}
+    except Exception as e:
+        logging.error(f"Dodo webhook error: {e}")
+        raise HTTPException(status_code=400, detail="Invalid webhook")
