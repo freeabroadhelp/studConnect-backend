@@ -882,57 +882,15 @@ def _resolve_host(host: str) -> tuple[bool, str | None]:
         return False, str(e)
 
 def _dodo_base_urls() -> list[str]:
-    force_env = os.getenv("DODO_ENV", "live").lower()  # optional: 'test' or 'live'
-    if force_env not in ("test", "live"):
-        force_env = None
-    key = os.getenv("DODO_PAYMENTS_API_KEY", "")
-    is_test = key.startswith("sk_test_")
-    if force_env == "live" or (force_env is None and not is_test):
-        return ["https://live.dodopayments.com"]
-    return ["https://test.dodopayments.com"]
-
-async def _http_post_with_retry(url: str, headers: dict, payload: dict, attempts: int = 3) -> httpx.Response:
-    last_exc = None
-    for i in range(attempts):
-        try:
-            timeout = httpx.Timeout(connect=10.0, read=25.0, write=10.0)
-            async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-                return await client.post(url, json=payload, headers=headers)
-        except (httpx.ConnectError, httpx.TimeoutException) as e:
-            last_exc = e
-            backoff = 2 ** i
-            logging.warning(f"[Dodo] Attempt {i+1}/{attempts} failed ({e}). Retrying in {backoff}s...")
-            await asyncio.sleep(backoff)
-        except Exception as e:
-            last_exc = e
-            break
-    raise last_exc
-
-def _format_gateway_error(dns_failures: list[dict], transport_failures: list[dict]) -> str:
-    parts = []
-    if dns_failures:
-        parts.append("DNS resolution failures:")
-        for f in dns_failures:
-            parts.append(f"  - {f['host']}: {f['error']}")
-    if transport_failures:
-        parts.append("Transport/connect failures:")
-        for f in transport_failures:
-            parts.append(f"  - {f['endpoint']}: {f['error']}")
-    parts.append("Resolution steps:")
-    parts.append("  1. Verify your server outbound network allows *.dodopayments.com")
-    parts.append("  2. Confirm API key (test vs live) matches selected environment")
-    parts.append("  3. Set DODO_ENV=test or DODO_ENV=live to force environment if needed")
-    parts.append("  4. If DNS continues failing, contact hosting provider and Dodo support")
-    return "\n".join(parts)
+    """Live-only endpoint (no test environment)."""
+    return ["https://live.dodopayments.com"]
 
 @app.post("/api/create-dodo-session", tags=["payments"])
 async def create_dodo_session(request: PaymentRequest):
     """
-    Production-level Dodo checkout session creation with:
-    - Environment auto-detection (test/live)
-    - DNS validation
-    - Retry & exponential backoff
-    - Clear diagnostics (no raw Errno -5 leak)
+    Live-only Dodo checkout session creation.
+    - Requires a live API key (sk_live_*)
+    - Single endpoint: https://live.dodopayments.com/checkouts
     """
     try:
         if not request.booking_id or not request.amount or request.amount <= 0:
@@ -942,30 +900,27 @@ async def create_dodo_session(request: PaymentRequest):
         api_key = DODO_API_KEY
         if not api_key or len(api_key) < 10:
             raise HTTPException(status_code=500, detail="Payment gateway not configured (missing API key)")
-        
+        if api_key.startswith("sk_test_"):
+            raise HTTPException(status_code=400, detail="Test API key provided. Set a live key (sk_live_...).")
+
         discount = 0
         if request.discount_code and request.discount_code.lower() == "save50":
             discount = 50
         final_amount = max(request.amount - discount, 0)
 
-        base_urls = _dodo_base_urls()
-        dns_failures = []
-        transport_failures = []
-
-        resolved_urls = []
-        for base in base_urls:
-            host = base.replace("https://", "").split("/")[0]
-            ok, msg = _resolve_host(host)
-            if ok:
-                resolved_urls.append(base)
-                logging.info(f"[Dodo] DNS OK {host} -> {msg}")
-            else:
-                logging.error(f"[Dodo] DNS FAIL {host}: {msg}")
-                dns_failures.append({"host": host, "error": msg})
-
-        if not resolved_urls:
-            detail = _format_gateway_error(dns_failures, transport_failures)
-            raise HTTPException(status_code=503, detail=detail)
+        base_url = _dodo_base_urls()[0]  # live only
+        host = base_url.replace("https://", "").split("/")[0]
+        ok_dns, dns_msg = _resolve_host(host)
+        if not ok_dns:
+            raise HTTPException(
+                status_code=503,
+                detail=f"DNS resolution failed for {host}: {dns_msg}\n"
+                       "Resolution steps:\n"
+                       "  1. Verify outbound DNS/network access to live.dodopayments.com:443\n"
+                       "  2. Ensure no firewall blocks egress\n"
+                       "  3. Retry after network stabilization\n"
+                       "  4. Contact hosting + Dodo support with this message"
+            )
 
         payload = {
             "product_cart": [
@@ -1009,71 +964,69 @@ async def create_dodo_session(request: PaymentRequest):
             "User-Agent": "StudConnect/1.0"
         }
 
-        for base in resolved_urls:
-            endpoint = f"{base}/checkouts"
-            logging.info(f"[Dodo] Attempting endpoint: {endpoint}")
+        endpoint = f"{base_url}/checkouts"
+        logging.info(f"[Dodo LIVE] POST {endpoint}")
+
+        resp = await _http_post_with_retry(endpoint, headers, payload, attempts=3)
+        body_text = resp.text
+        logging.info(f"[Dodo LIVE] Status {resp.status_code}")
+
+        if resp.status_code in (200, 201):
             try:
-                resp = await _http_post_with_retry(endpoint, headers, payload, attempts=3)
-                logging.info(f"[Dodo] Status {resp.status_code} from {endpoint}")
-                body_text = resp.text
-                if resp.status_code in (200, 201):
-                    try:
-                        data = resp.json()
-                    except json.JSONDecodeError:
-                        raise HTTPException(status_code=502, detail="Invalid JSON from gateway")
+                data = resp.json()
+            except json.JSONDecodeError:
+                raise HTTPException(status_code=502, detail="Invalid JSON from payment gateway")
 
-                    checkout_url = (
-                        data.get("checkout_url") or
-                        data.get("url") or
-                        data.get("payment_url") or
-                        data.get("redirect_url")
-                    )
-                    session_id = (
-                        data.get("session_id") or
-                        data.get("id") or
-                        data.get("checkout_session_id")
-                    )
-                    if not checkout_url:
-                        raise HTTPException(status_code=502, detail="Missing checkout_url in gateway response")
+            checkout_url = (
+                data.get("checkout_url") or
+                data.get("url") or
+                data.get("payment_url") or
+                data.get("redirect_url")
+            )
+            session_id = (
+                data.get("session_id") or
+                data.get("id") or
+                data.get("checkout_session_id")
+            )
+            if not checkout_url:
+                raise HTTPException(status_code=502, detail="Missing checkout_url in gateway response")
 
-                    return {
-                        "checkout_url": checkout_url,
-                        "session_id": session_id,
-                        "booking_id": request.booking_id,
-                        "amount": final_amount,
-                        "status": "success",
-                        "payment_type": "dodo",
-                        "environment": "test" if base.endswith("test.dodopayments.com") else "live",
-                        "discount_applied": discount
-                    }
-                elif resp.status_code == 401:
-                    raise HTTPException(status_code=500, detail="Gateway authentication failed (check API key & mode)")
-                elif resp.status_code == 400:
-                    try:
-                        err_json = resp.json()
-                        msg = err_json.get("message") or err_json.get("error") or body_text[:200]
-                    except:
-                        msg = body_text[:200]
-                    raise HTTPException(status_code=400, detail=f"Gateway validation error: {msg}")
-                else:
-                    transport_failures.append({"endpoint": endpoint, "error": f"HTTP {resp.status_code}: {body_text[:120]}"})
-                    logging.warning(f"[Dodo] Non-success status {resp.status_code} continuing...")
-                    continue
-            except HTTPException:
-                raise
-            except Exception as e:
-                transport_failures.append({"endpoint": endpoint, "error": str(e)})
-                logging.error(f"[Dodo] Transport error {endpoint}: {e}")
-                continue
+            return {
+                "checkout_url": checkout_url,
+                "session_id": session_id,
+                "booking_id": request.booking_id,
+                "amount": final_amount,
+                "status": "success",
+                "payment_type": "dodo",
+                "environment": "live",
+                "discount_applied": discount
+            }
 
-        # Exhausted all endpoints
-        detail = _format_gateway_error(dns_failures, transport_failures)
-        raise HTTPException(status_code=503, detail=detail)
+        if resp.status_code == 401:
+            raise HTTPException(status_code=500, detail="Gateway authentication failed. Verify live API key.")
+        if resp.status_code == 400:
+            try:
+                err_json = resp.json()
+                msg = err_json.get("message") or err_json.get("error") or body_text[:200]
+            except:
+                msg = body_text[:200]
+            raise HTTPException(status_code=400, detail=f"Gateway validation error: {msg}")
+
+        raise HTTPException(
+            status_code=502,
+            detail=f"Unexpected gateway status {resp.status_code}: {body_text[:250]}"
+        )
 
     except HTTPException:
         raise
+    except (httpx.TimeoutException, httpx.ConnectError) as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Network error reaching Dodo live endpoint: {e}\n"
+                   "Check outbound connectivity, firewall, and retry."
+        )
     except Exception as e:
-        logging.error(f"[Dodo] Unhandled exception: {e}", exc_info=True)
+        logging.error(f"[Dodo LIVE] Unhandled exception: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Internal payment processing error: {e}")
 
 @app.get("/debug/dodo-status", tags=["payments"])
@@ -1081,10 +1034,11 @@ def dodo_status():
     key = DODO_API_KEY or ""
     return {
         "api_key_present": bool(key),
-        "api_key_prefix": key[:7] if key else None,
-        "mode_detected": "test" if key.startswith("sk_test_") else ("live" if key.startswith("sk_live_") else "unknown"),
-        "forced_env": os.getenv("DODO_ENV"),
-        "candidate_base_urls": _dodo_base_urls(),
+        "api_key_prefix": key[:10] + "..." if key else None,
+        "is_live_key": key.startswith("sk_live_"),
+        "warning": None if (key and key.startswith("sk_live_")) else "Provide a live key (sk_live_*) for production.",
+        "endpoint_used": "https://live.dodopayments.com/checkouts",
+        "product_id": "pdt_isuaGsszAodjHrUaplbG4",
         "timestamp": datetime.utcnow().isoformat()
     }
 
