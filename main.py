@@ -1190,7 +1190,6 @@ async def dodo_webhook(request: Request, db_session=Depends(get_db)):
         logging.error(f"[Dodo WEBHOOK] Unhandled: {e}", exc_info=True)
         return {"status": "error", "message": str(e)}
 
-# --- Booking payment status poll endpoint (added) ---
 @app.get("/peer-counsellors/booking-status", tags=["peer-counsellors"])
 def booking_status(booking_id: int = Query(...), db_session=Depends(get_db)):
     db: Session
