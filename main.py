@@ -966,7 +966,7 @@ async def create_dodo_session(request: PaymentRequest):
                 "zipcode": "110001"
             },
             "billing_currency": "INR",
-            "return_url": f"{FRONTEND_URL}/payment-success?bookingId={request.booking_id}",
+            "return_url": f"{FRONTEND_URL}/payment-status?bookingId={request.booking_id}",
             "metadata": {
                 "bookingId": str(request.booking_id),
                 "service": "peer_counselling",
