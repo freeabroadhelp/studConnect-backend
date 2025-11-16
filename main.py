@@ -978,7 +978,7 @@ async def create_dodo_session(request: PaymentRequest):
                 "customer_name": request.customer.name
             },
             "confirm": True,
-            "allowed_payment_method_types": ["credit", "debit"],
+            "allowed_payment_method_types": ["credit", "debit", "upi", "wallet", "netbanking"],
             "show_saved_payment_methods": False
         }
 
