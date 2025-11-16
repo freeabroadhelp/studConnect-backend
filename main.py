@@ -885,6 +885,31 @@ def _dodo_base_urls() -> list[str]:
     """Live-only endpoint (no test environment)."""
     return ["https://live.dodopayments.com"]
 
+async def _http_post_with_retry(
+    url: str,
+    headers: dict,
+    payload: dict,
+    attempts: int = 3
+) -> httpx.Response:
+   
+    for attempt in range(1, attempts + 1):
+        try:
+            timeout = httpx.Timeout(
+                connect=10.0,
+                read=25.0,
+                write=10.0,
+                pool=10.0
+            )
+            limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
+            async with httpx.AsyncClient(timeout=timeout, limits=limits, follow_redirects=True) as client:
+                return await client.post(url, json=payload, headers=headers)
+        except (httpx.TimeoutException, httpx.ConnectError) as e:
+            if attempt == attempts:
+                raise
+            backoff = 2 ** (attempt - 1)
+            logging.warning(f"[Dodo LIVE] attempt {attempt} failed ({e}); retrying in {backoff}s")
+            await asyncio.sleep(backoff)
+
 @app.post("/api/create-dodo-session", tags=["payments"])
 async def create_dodo_session(request: PaymentRequest):
     """
