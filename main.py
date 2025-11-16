@@ -1067,3 +1067,141 @@ def dodo_status():
         "timestamp": datetime.utcnow().isoformat()
     }
 
+import base64
+
+ZOOM_ACCOUNT_ID = os.getenv("ZOOM_ACCOUNT_ID")
+ZOOM_CLIENT_ID = os.getenv("ZOOM_CLIENT_ID")
+ZOOM_CLIENT_SECRET = os.getenv("ZOOM_CLIENT_SECRET")
+
+_zoom_cache = {"token": None, "exp": None}
+
+async def get_zoom_token() -> str:
+    if not (ZOOM_ACCOUNT_ID and ZOOM_CLIENT_ID and ZOOM_CLIENT_SECRET):
+        raise RuntimeError("Zoom credentials missing")
+    now = datetime.utcnow()
+    if _zoom_cache["token"] and _zoom_cache["exp"] and now < _zoom_cache["exp"]:
+        return _zoom_cache["token"]
+    auth_bytes = f"{ZOOM_CLIENT_ID}:{ZOOM_CLIENT_SECRET}".encode()
+    auth_header = base64.b64encode(auth_bytes).decode()
+    url = f"https://zoom.us/oauth/token?grant_type=account_credentials&account_id={ZOOM_ACCOUNT_ID}"
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        r = await client.post(url, headers={"Authorization": f"Basic {auth_header}"})
+        if r.status_code != 200:
+            raise RuntimeError(f"Zoom token error {r.status_code}: {r.text[:150]}")
+        data = r.json()
+        _zoom_cache["token"] = data.get("access_token")
+        _zoom_cache["exp"] = now + timedelta(seconds=data.get("expires_in", 3600) - 60)
+        return _zoom_cache["token"]
+
+async def create_zoom_meeting(slot_dt: datetime, student_email: str, counsellor_email: str) -> dict:
+    token = await get_zoom_token()
+    payload = {
+        "topic": "Peer Counselling Session",
+        "type": 2,
+        "start_time": slot_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "duration": 30,
+        "timezone": "UTC",
+        "agenda": f"Session: {student_email} with {counsellor_email}",
+        "settings": {"host_video": True, "participant_video": True, "waiting_room": True}
+    }
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        r = await client.post("https://api.zoom.us/v2/users/me/meetings",
+                              headers={"Authorization": f"Bearer {token}",
+                                       "Content-Type": "application/json"},
+                              json=payload)
+        if r.status_code not in (200, 201):
+            raise RuntimeError(f"Zoom meeting error {r.status_code}: {r.text[:200]}")
+        jd = r.json()
+        return {"join_url": jd.get("join_url"), "start_url": jd.get("start_url"), "id": jd.get("id")}
+
+@app.post("/webhook/dodo", tags=["payments"])
+async def dodo_webhook(request: Request, db_session=Depends(get_db)):
+    
+    try:
+        raw = await request.body()
+        logging.info(f"[Dodo WEBHOOK] Raw: {raw[:500].decode(errors='ignore')}")
+        try:
+            event = json.loads(raw.decode())
+        except json.JSONDecodeError:
+            return {"status": "error", "message": "Invalid JSON"}
+        event_type = event.get("event") or event.get("type")
+        data = event.get("data") or {}
+        metadata = data.get("metadata") or {}
+        booking_id = metadata.get("bookingId") or metadata.get("booking_id")
+        if not booking_id:
+            return {"status": "ignored", "message": "No bookingId in metadata"}
+
+        if event_type not in ("checkout.session.completed", "payment.succeeded"):
+            return {"status": "ignored", "message": f"Event {event_type} not processed"}
+
+        db: Session
+        with db_session as db:
+            booking = db.query(PeerCounsellorBooking).filter_by(id=int(booking_id)).first()
+            if not booking:
+                return {"status": "error", "message": "Booking not found"}
+            if booking.payment_status == "paid" and booking.meeting_link:
+                return {"status": "ok", "message": "Already processed"}
+
+            booking.payment_status = "paid"
+
+            meeting_link = None
+            try:
+                zoom_info = await create_zoom_meeting(booking.slot_date, booking.user_email, booking.counsellor_email)
+                meeting_link = zoom_info["join_url"]
+                booking.meeting_link = meeting_link
+            except Exception as ze:
+                logging.error(f"[Zoom] Failed to create meeting for booking {booking.id}: {ze}")
+
+            db.commit()
+            db.refresh(booking)
+
+            slot_time_disp = booking.slot_date.strftime("%A, %d %B %Y at %H:%M UTC")
+            student_msg = (
+                f"Dear {booking.user_email},\n\n"
+                f"Payment confirmed. Your session is booked.\n"
+                f"Date & Time: {slot_time_disp}\n"
+                f"Meeting Link: {booking.meeting_link or 'Pending'}\n\n"
+                f"Please join 5 minutes early.\n\nStudConnect"
+            )
+            counsellor_msg = (
+                f"Dear {booking.counsellor_email},\n\n"
+                f"A paid session has been booked.\n"
+                f"Student: {booking.user_email}\n"
+                f"Date & Time: {slot_time_disp}\n"
+                f"Meeting Link: {booking.meeting_link or 'Pending'}\n\n"
+                f"Please be ready.\n\nStudConnect"
+            )
+            try:
+                send_email(booking.user_email, "Session Confirmed & Meeting Link", student_msg)
+            except Exception as e:
+                logging.error(f"[Email] Student send failed: {e}")
+            try:
+                send_email(booking.counsellor_email, "New Paid Session Booked", counsellor_msg)
+            except Exception as e:
+                logging.error(f"[Email] Counsellor send failed: {e}")
+
+            return {
+                "status": "success",
+                "booking_id": booking.id,
+                "payment_status": booking.payment_status,
+                "meeting_link": booking.meeting_link
+            }
+    except Exception as e:
+        logging.error(f"[Dodo WEBHOOK] Unhandled: {e}", exc_info=True)
+        return {"status": "error", "message": str(e)}
+
+# --- Booking payment status poll endpoint (added) ---
+@app.get("/peer-counsellors/booking-status", tags=["peer-counsellors"])
+def booking_status(booking_id: int = Query(...), db_session=Depends(get_db)):
+    db: Session
+    with db_session as db:
+        b = db.query(PeerCounsellorBooking).filter_by(id=booking_id).first()
+        if not b:
+            raise HTTPException(status_code=404, detail="Booking not found")
+        return {
+            "booking_id": b.id,
+            "payment_status": b.payment_status,
+            "meeting_link": b.meeting_link,
+            "slot_date": b.slot_date.isoformat()
+        }
+
