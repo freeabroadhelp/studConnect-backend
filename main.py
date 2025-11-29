@@ -788,75 +788,6 @@ def confirm_peer_counsellor_payment(
             "created_at": booking.created_at.isoformat()
         }
 
-@app.get("/peer-counsellors/bookings", tags=["peer-counsellors"])
-def list_peer_counsellor_bookings(
-    db: Session = Depends(get_db),
-    current_user: UserOut = Depends(auth_user),
-    status_filter: Optional[str] = Query(None, description="pending, paid, failed"),
-    days_ahead: int = Query(30, ge=1, le=90)
-):
-    query = db.query(PeerCounsellorBooking)
-
-    if current_user.role == "student":
-        query = query.filter(PeerCounsellorBooking.user_id == current_user.id)
-
-    elif current_user.role == "counsellor":
-        counsellor = (
-            db.query(PeerCounsellor)
-            .filter_by(email=current_user.email)
-            .first()
-        )
-        if not counsellor:
-            return []
-
-        query = query.filter(PeerCounsellorBooking.counsellor_id == counsellor.id)
-
-        if status_filter:
-            query = query.filter(PeerCounsellorBooking.payment_status == status_filter)
-
-    now = datetime.utcnow()
-    end_date = now + timedelta(days=days_ahead)
-
-    query = query.filter(
-        PeerCounsellorBooking.slot_date >= now,
-        PeerCounsellorBooking.slot_date <= end_date
-    ).order_by(PeerCounsellorBooking.slot_date)
-
-    bookings = query.all()
-
-    result = []
-    for booking in bookings:
-        availability = (
-            db.query(PeerCounsellorAvailability)
-            .filter_by(id=booking.slot_id)
-            .first()
-        )
-        counsellor = (
-            db.query(PeerCounsellor)
-            .filter_by(id=booking.counsellor_id)
-            .first()
-        )
-
-        result.append({
-            "booking_id": booking.id,
-            "user_id": booking.user_id,
-            "user_email": booking.user_email,
-            "counsellor_id": booking.counsellor_id,
-            "counsellor_email": booking.counsellor_email,
-            "counsellor_name": counsellor.name if counsellor else None,
-            "slot_id": booking.slot_id,
-            "slot_date": booking.slot_date.isoformat(),
-            "slot_day": booking.slot_date.strftime("%A"),
-            "start_time": availability.start_time if availability else None,
-            "end_time": availability.end_time if availability else None,
-            "payment_status": booking.payment_status,
-            "meeting_link": booking.meeting_link,
-            "created_at": booking.created_at.isoformat(),
-            "charges": counsellor.charges if counsellor else None
-        })
-
-    return result
-
 
 import httpx
 import os
@@ -1212,4 +1143,40 @@ def booking_status(booking_id: int = Query(...), db_session=Depends(get_db)):
             "meeting_link": b.meeting_link,
             "slot_date": b.slot_date.isoformat()
         }
+
+@app.get("/peer-counsellors/student-bookings", tags=["peer-counsellors"])
+def get_student_bookings(
+    user_id: int = Query(None, description="Student user ID"),
+    user_email: str = Query(None, description="Student email"),
+    db_session=Depends(get_db)
+):
+    """
+    Get all peer counsellor bookings for a student by user_id or user_email.
+    At least one of user_id or user_email must be provided.
+    """
+    if not user_id and not user_email:
+        raise HTTPException(status_code=400, detail="user_id or user_email is required")
+    db: Session
+    with db_session as db:
+        query = db.query(PeerCounsellorBooking)
+        if user_id:
+            query = query.filter(PeerCounsellorBooking.user_id == user_id)
+        if user_email:
+            query = query.filter(PeerCounsellorBooking.user_email == user_email)
+        bookings = query.order_by(PeerCounsellorBooking.slot_date.desc()).all()
+        return [
+            {
+                "id": b.id,
+                "user_id": b.user_id,
+                "user_email": b.user_email,
+                "counsellor_id": b.counsellor_id,
+                "counsellor_email": b.counsellor_email,
+                "slot_id": b.slot_id,
+                "slot_date": b.slot_date.isoformat(),
+                "payment_status": b.payment_status,
+                "meeting_link": b.meeting_link,
+                "created_at": b.created_at.isoformat()
+            }
+            for b in bookings
+        ]
 
