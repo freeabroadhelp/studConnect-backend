@@ -790,12 +790,12 @@ def confirm_peer_counsellor_payment(
 
 @app.get("/peer-counsellors/bookings", tags=["peer-counsellors"])
 def list_peer_counsellor_bookings(
-    db_session: Session = Depends(get_db),
+    db_session=Depends(get_db),
     current_user: UserOut = Depends(auth_user),
     status_filter: Optional[str] = Query(None, description="Filter by payment status: pending, paid, failed"),
     days_ahead: int = Query(30, ge=1, le=90, description="Number of days ahead to fetch bookings (default 30, max 90)")
 ):
-    db = db_session
+    db = next(db_session) if hasattr(db_session, '__iter__') and not isinstance(db_session, Session) else db_session
     query = db.query(PeerCounsellorBooking)
     
     if current_user.role == "student":
