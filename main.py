@@ -790,40 +790,53 @@ def confirm_peer_counsellor_payment(
 
 @app.get("/peer-counsellors/bookings", tags=["peer-counsellors"])
 def list_peer_counsellor_bookings(
-    db_session=Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(auth_user),
-    status_filter: Optional[str] = Query(None, description="Filter by payment status: pending, paid, failed"),
-    days_ahead: int = Query(30, ge=1, le=90, description="Number of days ahead to fetch bookings (default 30, max 90)")
+    status_filter: Optional[str] = Query(None, description="pending, paid, failed"),
+    days_ahead: int = Query(30, ge=1, le=90)
 ):
-    db = next(db_session) if hasattr(db_session, '__iter__') and not isinstance(db_session, Session) else db_session
     query = db.query(PeerCounsellorBooking)
-    
+
     if current_user.role == "student":
         query = query.filter(PeerCounsellorBooking.user_id == current_user.id)
+
     elif current_user.role == "counsellor":
-        counsellor = db.query(PeerCounsellor).filter_by(email=current_user.email).first()
-        if counsellor:
-            query = query.filter(PeerCounsellorBooking.counsellor_id == counsellor.id)
-        else:
+        counsellor = (
+            db.query(PeerCounsellor)
+            .filter_by(email=current_user.email)
+            .first()
+        )
+        if not counsellor:
             return []
-        query = query.filter(PeerCounsellorBooking.payment_status == status_filter)
-    
+
+        query = query.filter(PeerCounsellorBooking.counsellor_id == counsellor.id)
+
+        if status_filter:
+            query = query.filter(PeerCounsellorBooking.payment_status == status_filter)
+
     now = datetime.utcnow()
     end_date = now + timedelta(days=days_ahead)
+
     query = query.filter(
         PeerCounsellorBooking.slot_date >= now,
         PeerCounsellorBooking.slot_date <= end_date
-    )
-    
-    query = query.order_by(PeerCounsellorBooking.slot_date)
-    
+    ).order_by(PeerCounsellorBooking.slot_date)
+
     bookings = query.all()
-    
+
     result = []
     for booking in bookings:
-        availability = db.query(PeerCounsellorAvailability).filter_by(id=booking.slot_id).first()
-        counsellor = db.query(PeerCounsellor).filter_by(id=booking.counsellor_id).first()
-        
+        availability = (
+            db.query(PeerCounsellorAvailability)
+            .filter_by(id=booking.slot_id)
+            .first()
+        )
+        counsellor = (
+            db.query(PeerCounsellor)
+            .filter_by(id=booking.counsellor_id)
+            .first()
+        )
+
         result.append({
             "booking_id": booking.id,
             "user_id": booking.user_id,
@@ -841,7 +854,7 @@ def list_peer_counsellor_bookings(
             "created_at": booking.created_at.isoformat(),
             "charges": counsellor.charges if counsellor else None
         })
-    
+
     return result
 
 
@@ -854,10 +867,8 @@ from pydantic import BaseModel
 import socket
 import asyncio
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 
-# Environment variables
 DODO_API_KEY = os.getenv("DODO_PAYMENTS_API_KEY")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 BACKEND_URL = os.getenv("BACKEND_URL", "https://studconnect-backend.onrender.com")
@@ -881,7 +892,6 @@ def _resolve_host(host: str) -> tuple[bool, str | None]:
         return False, str(e)
 
 def _dodo_base_urls() -> list[str]:
-    """Live-only endpoint (no test environment)."""
     return ["https://live.dodopayments.com"]
 
 async def _http_post_with_retry(
