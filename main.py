@@ -568,7 +568,7 @@ def upsert_peer_counsellor(
     payload: dict = Body(...),
     db_session=Depends(get_db)
 ):
-   
+    
     db: Session
     with db_session as db:
         email = payload.get("email")
@@ -576,13 +576,9 @@ def upsert_peer_counsellor(
             raise HTTPException(status_code=400, detail="Email is required")
         peer = db.query(PeerCounsellor).filter_by(email=email).first()
         if peer:
-            for field in [
-                "name", "phone", "contact_method", "university", "program", "location",
-                "languages", "profile_image_url", "about", "expertise", "work_experience",
-                "peer_support_experience", "projects", "journey", "charges"
-            ]:
-                if field in payload:
-                    setattr(peer, field, payload[field])
+            for field, value in payload.items():
+                if hasattr(peer, field) and value is not None:
+                    setattr(peer, field, value)
         else:
             peer = PeerCounsellor(**payload)
             db.add(peer)
@@ -616,10 +612,23 @@ def upsert_peer_availability(
     slots: list[dict] = Body(...),
     db_session=Depends(get_db)
 ):
+   
     db: Session
     with db_session as db:
-        db.query(PeerCounsellorAvailability).filter_by(counsellor_id=counsellor_id).delete()
-      
+        existing_slots = db.query(PeerCounsellorAvailability).filter_by(counsellor_id=counsellor_id).all()
+        slot_ids = [slot.id for slot in existing_slots]
+        referenced_slot_ids = set(
+            r[0] for r in db.query(PeerCounsellorBooking.slot_id)
+            .filter(PeerCounsellorBooking.counsellor_id == counsellor_id)
+            .filter(PeerCounsellorBooking.slot_id.in_(slot_ids))
+            .all()
+        )
+        deletable_slot_ids = set(slot_ids) - referenced_slot_ids
+        if deletable_slot_ids:
+            db.query(PeerCounsellorAvailability).filter(
+                PeerCounsellorAvailability.counsellor_id == counsellor_id,
+                PeerCounsellorAvailability.id.in_(deletable_slot_ids)
+            ).delete(synchronize_session=False)
         for slot in slots:
             db.add(PeerCounsellorAvailability(
                 counsellor_id=counsellor_id,
@@ -628,7 +637,11 @@ def upsert_peer_availability(
                 end_time=slot["end_time"]
             ))
         db.commit()
-        return {"status": "ok", "count": len(slots)}
+        return {
+            "status": "ok",
+            "count": len(slots),
+            "skipped_existing_slots": list(referenced_slot_ids)
+        }
 
 @app.post("/peer-counsellors/book-slot", tags=["peer-counsellors"])
 def book_peer_counsellor_slot(
@@ -683,6 +696,42 @@ def book_peer_counsellor_slot(
         db.add(booking)
         db.commit()
         db.refresh(booking)
+
+        try:
+            subject = "Your Peer Counselling Booking Request"
+            message = (
+                f"Dear {booking.user_email},\n\n"
+                f"Your booking request has been received for {booking.slot_date.strftime('%A, %d %B %Y at %H:%M')}.\n"
+                f"Status: {booking.payment_status}\n"
+                f"Peer Counsellor: {booking.counsellor_email}\n\n"
+                f"Thank you for booking with us!\n"
+            )
+            send_email(
+                to_email=booking.user_email,
+                subject=subject,
+                message=message
+            )
+        except Exception as e:
+            logging.error(f"Failed to send booking email to candidate: {e}")
+
+        try:
+            subject = "A New Booking Has Been Made With You"
+            message = (
+                f"Dear {booking.counsellor_email},\n\n"
+                f"A student ({booking.user_email}) has booked a session with you.\n"
+                f"Date & Time: {booking.slot_date.strftime('%A, %d %B %Y at %H:%M')}\n"
+                f"Status: {booking.payment_status}\n\n"
+                f"Please check your dashboard for details.\n\n"
+                f"Thank you for supporting students!\n"
+            )
+            send_email(
+                to_email=booking.counsellor_email,
+                subject=subject,
+                message=message
+            )
+        except Exception as e:
+            logging.error(f"Failed to send booking email to peer counsellor: {e}")
+
         return {
             "id": booking.id,
             "user_id": booking.user_id,
