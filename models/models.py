@@ -5,6 +5,26 @@ from datetime import datetime
 from typing import List, Optional, Any
 from sqlalchemy import JSON, Column, Integer, String, Text, DateTime, ForeignKey, Float
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.types import TypeDecorator, String as SqlString
+import json
+
+class JSONBCompat(TypeDecorator):
+    """A JSON type that works with both PostgreSQL and SQLite"""
+    impl = SqlString
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is not None:
+            return json.dumps(value)
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is not None:
+            try:
+                return json.loads(value)
+            except (ValueError, TypeError):
+                return value
+        return value
 from sqlalchemy.orm import Session, relationship
 import boto3
 import os
@@ -22,8 +42,8 @@ class AustraliaScholarship(Base):
     university = Column(String, nullable=False, unique=True)
     state = Column(String)
     type = Column(String)
-    scholarships = Column(JSONB)
-    common_programs = Column(JSONB)
+    scholarships = Column(JSONBCompat)
+    common_programs = Column(JSONBCompat)
     updated_at = Column(String)
 
 
@@ -99,12 +119,12 @@ class ResetPasswordRequest(BaseModel):
 class ProgramDetail(Base):
     __tablename__ = "program_details"
     id = Column(String, primary_key=True)
-    attributes = Column(JSONB)
-    school = Column(JSONB)
-    program = Column(JSONB)
-    program_requirements = Column(JSONB)
+    attributes = Column(JSONBCompat)
+    school = Column(JSONBCompat)
+    program = Column(JSONBCompat)
+    program_requirements = Column(JSONBCompat)
     school_id = Column(Integer)
-    program_basic = Column(JSONB)
+    program_basic = Column(JSONBCompat)
 
     @classmethod
     def upsert(cls, db: Session, entry: dict):
@@ -145,7 +165,7 @@ class Program(Base):
     __tablename__ = "programs"
     id = Column(String, primary_key=True)
     type = Column(String)
-    attributes = Column(JSONB)
+    attributes = Column(JSONBCompat)
 
     @classmethod
     def upsert(cls, db: Session, entry: dict):
@@ -176,9 +196,9 @@ class UniversityModel(Base):
     __tablename__ = "universities"
     id = Column(String, primary_key=True)
     type = Column(String)
-    attributes = Column(JSONB)
-    relationships = Column(JSONB)
-    included = Column(JSONB)
+    attributes = Column(JSONBCompat)
+    relationships = Column(JSONBCompat)
+    included = Column(JSONBCompat)
 
     @classmethod
     def upsert(cls, db: Session, entry: dict):
@@ -212,8 +232,8 @@ class ScholarshipModel(Base):
     awardAmountTo = Column(String)
     awardAmountType = Column(String)
     automaticallyApplied = Column(String)
-    eligibleLevels = Column(JSONB)
-    eligibleNationalities = Column(JSONB)
+    eligibleLevels = Column(JSONBCompat)
+    eligibleNationalities = Column(JSONBCompat)
     marketCode = Column(String)
     path = Column(String)
     schoolGroupId = Column(Integer)
