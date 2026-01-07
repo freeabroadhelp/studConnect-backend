@@ -1,185 +1,228 @@
 import requests
 import json
 
-# Define the API endpoint
-# API_BASE = "https://studconnect-backend.onrender.com"
-# If running locally, use: API_BASE = "http://127.0.0.1:8001"
-API_BASE = "http://127.0.0.1:8001"
+# API Configuration
+# Use localhost for local testing: "http://127.0.0.1:8001"
+API_BASE = "https://studconnect-backend.onrender.com"
 
-# Define the new peer counsellors data
 peer_counsellors_data = [
+    # 1. Navjot Navjot
     {
-        "email": "sofia.nathan@example.com",
+        "name": "Navjot Navjot",
+        "email": "n0aveen0@gmail.com",
+        "university": "Niagara College",
+        "program": "Graduated",
+        "location": "Scarborough, Canada",
+        "profile_image_url": "https://lh3.googleusercontent.com/d/16LUdOulQMx8Q6RX_ESb7QiTm5Eh5HlUc",
+        "about": "Business student with strong experience in customer service and administrative support. Passionate about helping students plan their study abroad journey with clear guidance and reliable assistance.",
+        "charges": 699,
+        "languages": "English, Hindi"
+    },
+    # 2. Reetika
+    {
+        "name": "Reetika",
+        "email": "reetika7700@yahoo.com",
+        "university": "Melbourne Institute of Technology",
+        "program": "Master of networking (2023-2025)",
+        "location": "Australia",
+        "profile_image_url": "https://lh3.googleusercontent.com/d/1pmAqCVgDB3vG_t7FnWq5SuOhBfWiVdPF",
+        "about": "A curious and solutions-driven MIT Sydney networking graduate with a passion for deconstructing and troubleshooting technology. Currently honing my analytical and customer-centric skills in the fast-paced retail industry. I'm also passionately developing my skills in the art of coffee brewing, expanding my reading list, and elevating my badminton game.",
+        "charges": 699,
+        "languages": "English"
+    },
+    # 3. Sofia Nathan
+    {
         "name": "Sofia Nathan",
+        "email": "nathansofia25@gmail.com",
         "university": "Trinity College Dublin - Trinity Business School",
         "program": "MSc International Management",
         "location": "India (Faridabad)",
-        "profile_image_url": "https://pub-e63ee2f49d7e4f94b98011a5350eea0f.r2.dev/sofia.jpg",
-        "about": "Experienced peer counsellor with expertise in international management studies.",
-        "charges": 25.00,
+        "profile_image_url": "https://lh3.googleusercontent.com/d/1jGThh1gYm1rCL8ACICjZO2OjV4w5tnR6",
+        "about": "Currently pursuing studies at Trinity College Dublin, I bring 1.5 years of experience as an Admission Support Officer at RMIT University. I am passionate about guiding students through their international education journey with first hand insights and honest advice.",
+        "charges": 699,
         "languages": "English, Hindi"
     },
+    # 4. Mihir Nagpal
     {
-        "email": "deeya.rao@example.com",
+        "name": "Mihir Nagpal",
+        "email": "mihirnagpal1@gmail.com",
+        "university": "University of Technology Sydney",
+        "program": "Master of Management",
+        "location": "Sydney, Australia",
+        "profile_image_url": "https://lh3.googleusercontent.com/d/1Dvta4mrDraWdo2mwGHAg5UHUM-1J_7S2",
+        "about": "Pursuing a Master of Management at the University of Technology Sydney with a focus on data analytics, consulting and marketing strategy. Dedicated to empowering organizations with effective solutions while fostering strong relationships through exceptional customer service.",
+        "charges": 699,
+        "languages": "English, Hindi"
+    },
+    # 5. Deeya Rao
+    {
         "name": "Deeya Rao",
+        "email": "deeyar2005@gmail.com",
         "university": "Federation University Mount Helen Campus",
-        "program": "Bachelor of Education",
+        "program": "Bachelor of Education Early Childhood and Primary Year 3",
         "location": "Australia, Melbourne",
-        "profile_image_url": "https://media.licdn.com/dms/image/v2/D5603AQFwP0wWQ2xx5Q/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1706663723339?e=2147483647&v=beta&t=ho3rTd-1ZxmhSYs3_T-aw2TSvN6fmbqQQJqzyH57vbY",
-        "about": "Education specialist providing guidance on teaching programs and career paths.",
-        "charges": 20.00,
+        "profile_image_url": "https://lh3.googleusercontent.com/d/1kauzat1HsVFBIG6_vIPDOdjaR0jOOHcD",
+        "about": "I believe in eventually tables turn and things get better.",
+        "charges": 699,
+        "languages": "English, Hindi"
+    },
+    # 6. Vijayan
+    {
+        "name": "Vijayan",
+        "email": "vijayantrikha1998@gmail.com",
+        "university": "George Brown College - St.James Campus, Toronto",
+        "program": "Project Management - 2025",
+        "location": "Toronto, Canada",
+        "profile_image_url": "https://lh3.googleusercontent.com/d/1ZCES9uhhGj2SeRaQA8aX-UfI6Eo5eCBN",
+        "about": "Over 2 years of learning life abroad and achieving education milestones - Life is like a roller coaster and we gotta two choices, either suffer or enjoy and I am on the thrilling side taking steps towards success",
+        "charges": 699,
+        "languages": "English, Hindi"
+    },
+    # 7. Zubia Maryam
+    {
+        "name": "Zubia Maryam",
+        "email": "zubiamaryam6@gmail.com",
+        "university": "University of Essex",
+        "program": "MSc Cancer Biology 2023-2024",
+        "location": "Colchester, Essex",
+        "profile_image_url": "https://lh3.googleusercontent.com/d/16tGOSZpMhImrHYYPkDU4YqlA6HeXwf4Z",
+        "about": "Zubia, a recent MSc cancer biology graduate from the University of Essex, has a strong educational background in the field.",
+        "charges": 699,
+        "languages": "English, Hindi"
+    },
+    # 8. Adarsh Rana
+    {
+        "name": "Adarsh Rana",
+        "email": "adarshrana141@gmail.com",
+        "university": "York St. John University (London Campus)",
+        "program": "MBA (1st Year)",
+        "location": "India, Himachal Pradesh, Kangra 176201",
+        "profile_image_url": "https://lh3.googleusercontent.com/d/1LixSgWgbe3bIvIyCNcdHud4c6Lo_rMC1",
+        "about": "Myself Adarsh Rana, I came UK back in 2024 for my post graduation (MBA) and have tackled Alot of problems in this journey till now.",
+        "charges": 699,
+        "languages": "English, Hindi"
+    },
+    # 9. Suhani Mehta
+    {
+        "name": "Suhani Mehta",
+        "email": "suhanimehta300@gmail.com",
+        "university": "Queensland University of Technology, Gardens Point",
+        "program": "Master of International Business, 2026",
+        "location": "Australia, Brisbane",
+        "profile_image_url": "https://lh3.googleusercontent.com/d/1T5SS4IuHIATivyTkvD10Fp_EJVP2hgEA",
+        "about": "International student in Australia.",
+        "charges": 699,
         "languages": "English"
     },
+    # 10. Shrit Singh
     {
-        "email": "vijayan.peer@example.com",
-        "name": "Vijayan",
-        "university": "Trinity College Dublin",
-        "program": "Computer Science",
-        "location": "Ireland",
-        "profile_image_url": "https://media.licdn.com/dms/image/v2/D4E03AQEDnr-dbqNsoQ/profile-displayphoto-scale_200_200/B4EZsT1aBTKUAY-/0/1765564326692?e=2147483647&v=beta&t=LFzecktMstpLsmMGoTWWgxeageNDVpdkbTl_0uYvgRc",
-        "about": "Technology expert helping students with computer science and software engineering programs.",
-        "charges": 30.00,
-        "languages": "English, Tamil"
-    },
-    {
-        "email": "zubia.maryam@example.com",
-        "name": "Zubia Maryam",
-        "university": "Trinity College Dublin",
-        "program": "Biomedical Engineering",
-        "location": "Ireland",
-        "profile_image_url": "https://media.licdn.com/dms/image/v2/D4E35AQGHcAGw0Jfihw/profile-framedphoto-shrink_400_400/B4EZjO33uTGoAc-/0/1755817409683?e=1767783600&v=beta&t=m0lRLghFwS41EIDVc3Q4xfoLsc251cx6JU0eabD4OqA",
-        "about": "Biomedical engineering specialist with experience in research and industry applications.",
-        "charges": 30.00,
-        "languages": "English, Urdu"
-    },
-    {
-        "email": "nandini.pandey@example.com",
-        "name": "Nandini Pandey",
-        "university": "University College Dublin",
-        "program": "Business Administration",
-        "location": "Ireland",
-        "profile_image_url": "https://media.licdn.com/dms/image/v2/D4E03AQGK39LMgCAbcQ/profile-displayphoto-scale_200_200/B4EZre5w9UKkAY-/0/1764676276794?e=2147483647&v=beta&t=Wg6kMLBDgUMzMZgGaJY2Qu5r_17OyGWrNit51K0OAgo",
-        "about": "Business administration expert with focus on marketing and strategy.",
-        "charges": 28.00,
-        "languages": "English, Hindi"
-    },
-    {
-        "email": "navjot.singh@example.com",
-        "name": "Navjot Singh",
-        "university": "Dublin City University",
-        "program": "International Relations",
-        "location": "Ireland",
-        "profile_image_url": "https://pub-e63ee2f49d7e4f94b98011a5350eea0f.r2.dev/Navjot%20Singh.HEIC",
-        "about": "International relations specialist with expertise in global studies and diplomacy.",
-        "charges": 27.00,
-        "languages": "English, Punjabi, Hindi"
-    },
-    {
-        "email": "adarsh.kumar@example.com",
-        "name": "Adarsh",
-        "university": "National University of Ireland, Galway",
-        "program": "Mechanical Engineering",
-        "location": "Ireland",
-        "profile_image_url": "https://pub-e63ee2f49d7e4f94b98011a5350eea0f.r2.dev/Adarsh.jpg",
-        "about": "Mechanical engineering expert with experience in design and manufacturing.",
-        "charges": 29.00,
-        "languages": "English, Hindi"
-    },
-    {
-        "email": "suhani.sharma@example.com",
-        "name": "Suhani",
-        "university": "Trinity College Dublin",
-        "program": "Psychology",
-        "location": "Ireland",
-        "profile_image_url": "https://media.licdn.com/dms/image/v2/C4D03AQHT248XGnMNfA/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1655185683632?e=2147483647&v=beta&t=G8tUfQ6a83bdx4w_fipoRLa5PODLAxFxdu9wCkRk4zM",
-        "about": "Psychology expert specializing in student wellbeing and academic success.",
-        "charges": 26.00,
-        "languages": "English, Hindi"
-    },
-    {
-        "email": "shrit.singh@example.com",
         "name": "Shrit Singh",
-        "university": "University College Cork",
-        "program": "Law",
-        "location": "Ireland",
-        "profile_image_url": "https://media.licdn.com/dms/image/v2/C4D03AQE2xipsYabvug/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1610456587335?e=1769040000&v=beta&t=ZJfJ6mlTupD1skQtLH_PQCDepdssqW6G4-2bIL8PDIc",
-        "about": "Legal expert providing guidance on law programs and career paths.",
-        "charges": 32.00,
-        "languages": "English, Hindi"
+        "email": "shrit7@icloud.com",
+        "university": "Auckland University",
+        "program": "Level 5 Disability Aging and Health Care",
+        "location": "India",
+        "profile_image_url": "https://lh3.googleusercontent.com/d/1ZCES9uhhGj2SeRaQA8aX-UfI6Eo5eCBN",
+        "about": "I am a good learner",
+        "charges": 699,
+        "languages": "English"
     },
+    # 11. Tushar
     {
-        "email": "tushar.sharma@example.com",
-        "name": "Tushar Sharma",
-        "university": "Dublin Institute of Technology",
-        "program": "Computer Science",
-        "location": "Ireland",
-        "profile_image_url": "https://media.licdn.com/dms/image/v2/C5103AQEwyI6-CTbNuw/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1549604196130?e=1769040000&v=beta&t=8chP25EWxmWzWnx1j0arXbmUsrAZUKvZG5bWH1MlPr4",
-        "about": "Computer science specialist with industry experience in software development.",
-        "charges": 30.00,
-        "languages": "English, Hindi"
-    },
-    {
-        "email": "suryansh.gupta@example.com",
-        "name": "Suryansh",
-        "university": "Trinity College Dublin",
-        "program": "Finance",
-        "location": "Ireland",
-        "profile_image_url": "https://media.licdn.com/dms/image/v2/D5603AQFf14t7zuF-1A/profile-displayphoto-scale_400_400/B56Zqrq7wEIcAk-/0/1763816781914?e=1769040000&v=beta&t=WpMVu-RlMIuPUEy7HFUz9sz8ziLhTfa0Db1UtWYcf8o",
-        "about": "Finance expert with experience in investment banking and financial analysis.",
-        "charges": 33.00,
-        "languages": "English, Hindi"
-    },
-    {
-        "email": "tushar.mehra@example.com",
         "name": "Tushar",
-        "university": "University College Dublin",
-        "program": "Data Science",
-        "location": "Ireland",
-        "profile_image_url": "https://media.licdn.com/dms/image/v2/D5603AQEW7rkf2-tVbA/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1726990956230?e=1769040000&v=beta&t=xIPtrCXOZ2qMZ7D06be-R9s9SOb6wq5jxJTwtpr6FLU",
-        "about": "Data science specialist with expertise in machine learning and analytics.",
-        "charges": 31.00,
+        "email": "itsted2407@gmail.com",
+        "university": "University",
+        "program": "3 Year",
+        "location": "India",
+        "profile_image_url": "https://lh3.googleusercontent.com/d/1bfgKiooPuWqhusY9RN1gfm_WE04BCo_o",
+        "about": "Photographer who's exploring the world",
+        "charges": 699,
         "languages": "English, Hindi"
     },
+    # 12. Suryansh Singh Panwar
     {
-        "email": "charchit.agarwal@example.com",
-        "name": "Charchit",
-        "university": "Dublin City University",
-        "program": "Marketing",
-        "location": "Ireland",
-        "profile_image_url": "https://media.licdn.com/dms/image/v2/D4D03AQEVz3_3LSZb4g/profile-displayphoto-scale_400_400/B4DZkRCXxiIYAs-/0/1756927460546?e=1769040000&v=beta&t=JdMTzV4Me_qVThsHZ0YtJawX4KDOnut06FZLnBA8F8w",
-        "about": "Marketing expert with experience in digital marketing and brand strategy.",
-        "charges": 28.00,
+        "name": "Suryansh Singh Panwar",
+        "email": "suryanshsp14@icloud.com",
+        "university": "University of Adelaide (North Terrace Campus)",
+        "program": "MBA (1st Year)",
+        "location": "Adelaide, Australia",
+        "profile_image_url": "https://lh3.googleusercontent.com/d/1FzA2hVZH8CFAYlJ0j8-lUgo1jXnESTTB",
+        "about": "I am an MBA candidate at the University of Adelaide with a strong interest in strategy, leadership, and marketing. I am driven by curiosity, growth, and creating meaningful impact in teams and organisations.",
+        "charges": 699,
         "languages": "English, Hindi"
     },
+    # 13. Tushar Sharma
     {
-        "email": "navjot.kaur@example.com",
-        "name": "Navjot",
-        "university": "University College Cork",
-        "program": "Nursing",
-        "location": "Ireland",
-        "profile_image_url": "https://media.licdn.com/dms/image/v2/D5603AQFwk6QHywlWGQ/profile-displayphoto-scale_400_400/B56Zel.aKFH8Ao-/0/1750836293236?e=1769040000&v=beta&t=sq53x5O2cTWpdL9L0Xgr6KAs9PspLfrq0s7BqXqXpCA",
-        "about": "Nursing specialist with clinical experience and academic guidance.",
-        "charges": 27.00,
-        "languages": "English, Punjabi"
+        "name": "Tushar Sharma",
+        "email": "tushar241999@gmail.com",
+        "university": "St. Lawrence College",
+        "program": "Digital Marketing and UX Design",
+        "location": "India",
+        "profile_image_url": "https://lh3.googleusercontent.com/d/18l6yjPMS39De0vH1aERCb53KO_-_lNEh",
+        "about": "Live Life without Regrets",
+        "charges": 699,
+        "languages": "English, Hindi"
+    },
+    # 14. Charchit Chauhan
+    {
+        "name": "Charchit Chauhan",
+        "email": "chauhancharchit81@gmail.com",
+        "university": "Tula State University Tula Russia",
+        "program": "Medical (MBBS)",
+        "location": "Tula, Russia",
+        "profile_image_url": "https://lh3.googleusercontent.com/d/1p-pb9XWmWOxZ8lrqQWyaalcQ7lO7XFPL",
+        "about": "I am a medical student currently living in Russia doing my studies. Belongs to a decent family and I have experienced many good and bad things in my life. Can be a good advisor for people regarding the things I have been through.",
+        "charges": 699,
+        "languages": "English, Hindi"
+    },
+    # 15. Navjot Singh
+    {
+        "name": "Navjot Singh",
+        "email": "navjotnv15@gmail.com",
+        "university": "Conestoga College, Kitchener DTK Campus",
+        "program": "Strategic Marketing and Communications 2025",
+        "location": "Kitchener ON, Canada",
+        "profile_image_url": "https://lh3.googleusercontent.com/d/11pYGPP17hW2R_eLg1sWAXWRTcKFQNLB1",
+        "about": "Hi, My name is Navjot. Im a marketing graduate working as a learning ambassador in Amazon Canada helping new hires to onboard. Living in Canada from the last 2 years and completely enjoying the country and its opportunities.",
+        "charges": 699,
+        "languages": "English, Hindi"
+    },
+    # 16. Nandini Pandey
+    {
+        "name": "Nandini Pandey",
+        "email": "nandinipandey083@gmail.com",
+        "university": "Queen Mary University of London",
+        "program": "MSc Biotechnology & Synthetic Biology, 2025-2026",
+        "location": "Ggn-India / London-UK",
+        "profile_image_url": "https://lh3.googleusercontent.com/d/1ZCES9uhhGj2SeRaQA8aX-UfI6Eo5eCBN",
+        "about": "Nandini Pandey, Emerging Biotechnology graduate & Climate Youth Leader working at the intersection of science, sustainability & community impact. Works with Commonwealth (INDIA) and student organizations in UK.",
+        "charges": 699,
+        "languages": "English, Hindi"
     }
 ]
 
 def update_peer_counsellors():
-    print("Updating peer counsellors data...")
+    print(f"Starting update process on: {API_BASE}")
     
+    updated_count = 0
+    failed_count = 0
+
     for counsellor in peer_counsellors_data:
         try:
-            print(f"Updating: {counsellor['name']}")
+            # Note: Ensure all required fields are filled before running
             response = requests.post(f"{API_BASE}/peer-counsellors/upsert", json=counsellor)
             
-            if response.status_code == 201:
-                print(f"✓ Successfully updated {counsellor['name']}")
+            if response.status_code in [200, 201]:
+                print(f"Updated: {counsellor['name']}")
+                updated_count += 1
             else:
-                print(f"✗ Failed to update {counsellor['name']}: {response.status_code} - {response.text}")
+                print(f"Failed: {counsellor['name']} (Status: {response.status_code}) - {response.text}")
+                failed_count += 1
+                
         except Exception as e:
-            print(f"✗ Error updating {counsellor['name']}: {str(e)}")
+            print(f"Error updating {counsellor['name']}: {str(e)}")
+            failed_count += 1
     
-    print("Peer counsellors update process completed.")
+    print(f"\nUpdate complete. Success: {updated_count}, Failed: {failed_count}")
 
 if __name__ == "__main__":
     update_peer_counsellors()
