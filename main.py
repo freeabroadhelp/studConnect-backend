@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, Depends, Header, Query, Path, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timedelta
+from recommendation.routes import router as recommendation_router
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 import random, string
@@ -37,6 +38,8 @@ logging.basicConfig(level=logging.INFO)
 logging.info("App starting with DATABASE_URL")
 
 app = FastAPI()
+
+app.include_router(recommendation_router)
 
 app.add_middleware(
     CORSMiddleware,

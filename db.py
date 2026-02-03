@@ -2,8 +2,6 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from dotenv import load_dotenv
-from contextlib import contextmanager
-
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -18,7 +16,6 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, futu
 
 Base.metadata.create_all(bind=engine)
 
-@contextmanager
 def get_db():
     db = SessionLocal()
     try:
