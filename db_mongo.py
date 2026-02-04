@@ -6,7 +6,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # MongoDB connection string
-MONGO_DETAILS = os.getenv("MONGO_URI", "mongodb+srv://admin:Demo@1910@userauth.zybyise.mongodb.net/")
+MONGO_DETAILS = os.getenv("MONGO_URI")
+if not MONGO_DETAILS:
+    raise ValueError("MONGO_URI environment variable is required")
+
 DATABASE_NAME = os.getenv("MONGO_DATABASE", "studconnect")
 
 # Create async client
