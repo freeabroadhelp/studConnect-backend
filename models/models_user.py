@@ -16,6 +16,7 @@ class User(Base):
     otp_code = Column(String(10), nullable=True)
     otp_expires = Column(DateTime(timezone=False), nullable=True)
     created_at = Column(DateTime(timezone=False), default=datetime.utcnow, nullable=False)
+    avatar_url = Column(String(500), nullable=True)
 
     def set_otp(self, code: str, minutes_valid: int | None = None):
         mv = minutes_valid or int(os.getenv("OTP_EXP_MIN", "5"))

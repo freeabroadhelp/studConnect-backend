@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, Depends, Header, Query, Path, Request, Body
+from fastapi import FastAPI, Depends, HTTPException, Depends, Header, Query, Path, Request, Body, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timedelta
 from sqlalchemy import and_
@@ -153,13 +153,77 @@ def auth_user(authorization: str | None = Header(default=None), db_session=Depen
             "full_name": user.full_name,
             "role": user.role,
             "is_verified": user.is_verified,
-            "created_at": user.created_at
+            "created_at": user.created_at,
+            "avatar_url": user.avatar_url
         }
         return UserOut.model_validate(payload)
 
 @app.get("/users/me", response_model=UserOut, tags=["users"], summary="Current user")
 def me(current: UserOut = Depends(auth_user)):
     return current
+
+
+@app.post("/users/upload-avatar", response_model=dict, tags=["users"], summary="Upload user avatar")
+async def upload_avatar(
+    file: UploadFile = File(...),
+    current_user: UserOut = Depends(auth_user),
+    db_session=Depends(get_db)
+):
+    from fastapi import HTTPException
+    from sqlalchemy.orm import Session
+    from models.models_user import User
+    from db_mongo import users_collection
+    import uuid
+    import os
+    from urllib.parse import quote
+    from bson import ObjectId
+    
+    # Validate file type
+    allowed_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="Invalid file type. Only JPEG, PNG, GIF, and WEBP are allowed.")
+    
+    # Validate file size (max 5MB)
+    # Read the file to check size
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:  # 5MB
+        raise HTTPException(status_code=400, detail="File size exceeds 5MB limit")
+    
+    # Reset file pointer after reading
+    await file.seek(0)
+    
+    # Generate unique filename
+    ext = os.path.splitext(file.filename)[1]
+    unique_filename = f"avatars/{current_user.id}_{uuid.uuid4()}{ext}"
+    
+    # For now, we'll simulate storing the URL in the MongoDB
+    avatar_url = f"/uploads/{unique_filename}"
+    
+    # Update user record in MongoDB
+    user_data = {
+        "avatar_url": avatar_url,
+        "updated_at": datetime.utcnow()
+    }
+    
+    # Update user in MongoDB collection
+    result = await users_collection.update_one(
+        {"user_id": current_user.id},
+        {"$set": user_data},
+        upsert=True
+    )
+    
+    # Also update in PostgreSQL for consistency
+    db: Session
+    with db_session as db:
+        user = db.query(User).filter(User.id == current_user.id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        user.avatar_url = avatar_url
+        db.commit()
+        db.refresh(user)
+        
+        return {"avatar_url": user.avatar_url}
 
 
 @app.get("/health", tags=["meta"], summary="Health check")
