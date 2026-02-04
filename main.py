@@ -154,13 +154,100 @@ def auth_user(authorization: str | None = Header(default=None), db_session=Depen
             "role": user.role,
             "is_verified": user.is_verified,
             "created_at": user.created_at,
-            "avatar_url": user.avatar_url
+            "avatar_url": user.avatar_url,
+            "phone": user.phone,
+            "gender": user.gender,
+            "date_of_birth": user.date_of_birth,
+            "address": user.address,
+            "city": user.city,
+            "postal_code": user.postal_code,
+            "country": user.country
         }
         return UserOut.model_validate(payload)
 
 @app.get("/users/me", response_model=UserOut, tags=["users"], summary="Current user")
 def me(current: UserOut = Depends(auth_user)):
     return current
+
+
+@app.put("/users/update", response_model=UserOut, tags=["users"], summary="Update user profile")
+async def update_user_profile(
+    user_update: dict = Body(...),
+    current_user: UserOut = Depends(auth_user),
+    db_session=Depends(get_db)
+):
+    from fastapi import HTTPException
+    from sqlalchemy.orm import Session
+    from models.models_user import User
+    from db_mongo import users_collection
+    from bson import ObjectId
+    
+    # Update user record in MongoDB
+    mongo_user_data = {
+        "full_name": user_update.get("full_name"),
+        "first_name": user_update.get("first_name"),
+        "last_name": user_update.get("last_name"),
+        "phone": user_update.get("phone"),
+        "gender": user_update.get("gender"),
+        "date_of_birth": user_update.get("date_of_birth"),
+        "address": user_update.get("address"),
+        "city": user_update.get("city"),
+        "postal_code": user_update.get("postal_code"),
+        "country": user_update.get("country"),
+        "avatar_url": user_update.get("avatar_url"),
+        "updated_at": datetime.utcnow()
+    }
+    
+    # Remove None values
+    mongo_user_data = {k: v for k, v in mongo_user_data.items() if v is not None}
+    
+    # Update user in MongoDB collection
+    result = await users_collection.update_one(
+        {"user_id": current_user.id},
+        {"$set": mongo_user_data},
+        upsert=True
+    )
+    
+    # Also update in PostgreSQL for consistency
+    db: Session
+    with db_session as db:
+        user = db.query(User).filter(User.id == current_user.id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Update fields if they exist in the request
+        if "full_name" in user_update:
+            user.full_name = user_update["full_name"]
+        if "phone" in user_update:
+            user.phone = user_update.get("phone")
+        if "gender" in user_update:
+            user.gender = user_update.get("gender")
+        if "date_of_birth" in user_update:
+            user.date_of_birth = user_update.get("date_of_birth")
+        if "address" in user_update:
+            user.address = user_update.get("address")
+        if "city" in user_update:
+            user.city = user_update.get("city")
+        if "postal_code" in user_update:
+            user.postal_code = user_update.get("postal_code")
+        if "country" in user_update:
+            user.country = user_update.get("country")
+        if "avatar_url" in user_update:
+            user.avatar_url = user_update.get("avatar_url")
+        
+        db.commit()
+        db.refresh(user)
+        
+        # Return updated user data
+        return UserOut(
+            id=str(user.id),
+            email=user.email,
+            full_name=user.full_name,
+            role=user.role,
+            is_verified=user.is_verified,
+            created_at=user.created_at,
+            avatar_url=user.avatar_url
+        )
 
 
 @app.post("/users/upload-avatar", response_model=dict, tags=["users"], summary="Upload user avatar")

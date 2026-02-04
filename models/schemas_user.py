@@ -23,6 +23,13 @@ class UserOut(BaseModel):
     is_verified: bool
     created_at: datetime
     avatar_url: str | None = None
+    phone: str | None = None
+    gender: str | None = None
+    date_of_birth: str | None = None
+    address: str | None = None
+    city: str | None = None
+    postal_code: str | None = None
+    country: str | None = None
     class Config:
         from_attributes = True
 
