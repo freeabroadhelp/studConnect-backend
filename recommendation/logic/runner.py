@@ -88,6 +88,7 @@ def _adapter_to_candidate(normalized: Dict[str, Any]) -> CandidateProgram:
         city=normalized.get("city", ""),
         global_reputation_band=reputation_band,
         institution_type=normalized.get("institution_type", ""),
+        logo_thumbnail_url=normalized.get("logo_thumbnail_url"),
         
         # Program data
         program_name=normalized.get("program_name", ""),
@@ -149,8 +150,8 @@ def run_recommendations(
     logger.info(f"🌍 Preferred countries: {profile.preferred_countries}")
     
     # Step 1: Fetch programs via adapter with HARD FILTERS
-    # Increase fetch limit to ensure large candidate pool
-    fetch_limit = 500  # Fetch more to ensure realistic pool after filtering
+    # Use optimized fetch limit - adapter now does SQL-level filtering
+    fetch_limit = min(100, limit)  # Reduced since adapter filters at SQL level now
     
     normalized_programs = fetch_and_transform_programs(
         db=db,

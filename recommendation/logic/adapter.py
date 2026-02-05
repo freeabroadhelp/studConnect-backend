@@ -14,6 +14,7 @@ This is a pure READ + TRANSFORM layer:
 from typing import List, Dict, Any, Optional
 from datetime import date, datetime
 from sqlalchemy.orm import Session
+from sqlalchemy import or_, cast, String
 
 from models.models import Program, UniversityModel
 
@@ -32,6 +33,20 @@ COUNTRY_CODE_MAP = {
     "SG": "Singapore",
     "NL": "Netherlands",
     "FR": "France",
+}
+
+# Reverse mapping: Full name to codes (for SQL filtering)
+COUNTRY_NAME_TO_CODES = {
+    "australia": ["AU", "au", "Australia"],
+    "canada": ["CA", "ca", "Canada"],
+    "germany": ["DE", "de", "Germany"],
+    "united kingdom": ["GB", "UK", "gb", "uk", "United Kingdom"],
+    "ireland": ["IE", "ie", "Ireland"],
+    "united states": ["US", "USA", "us", "usa", "United States"],
+    "new zealand": ["NZ", "nz", "New Zealand"],
+    "singapore": ["SG", "sg", "Singapore"],
+    "netherlands": ["NL", "nl", "Netherlands"],
+    "france": ["FR", "fr", "France"],
 }
 
 
@@ -284,6 +299,7 @@ def transform_program(program: Program, university: Optional[UniversityModel] = 
         "city": school.get("city") or uni_attrs.get("city") or "",
         "rank": rank,
         "institution_type": school.get("type") or uni_attrs.get("type") or "",
+        "logo_thumbnail_url": school.get("logoThumbnailUrl") or school.get("logo", {}).get("url_thumbnail") if isinstance(school.get("logo"), dict) else school.get("logoThumbnailUrl") or "",
         
         # Program info
         "program_name": attrs.get("name") or "",
@@ -339,19 +355,72 @@ def fetch_and_transform_programs(
     import logging
     logger = logging.getLogger(__name__)
     
-    # Fetch larger pool to ensure enough candidates after filtering
-    # This allows hard filters without collapsing the candidate pool
-    fetch_limit = 1000 if (country_filter or target_degree_level) else limit
+    # OPTIMIZATION: Use smaller fetch limit and apply SQL-level filtering where possible
+    # This reduces data transfer from DB and speeds up processing
+    fetch_limit = min(200, limit * 3) if (country_filter or target_degree_level) else limit
     
     logger.info(f"🔍 Fetching programs from DB (limit={fetch_limit}, offset={offset})")
-    programs = db.query(Program).offset(offset).limit(fetch_limit).all()
+    
+    # Build query with SQL-level country filtering if possible
+    query = db.query(Program)
+    
+    # PostgreSQL JSON filtering for country (much faster than Python filtering)
+    # NOTE: We search for BOTH full country names AND country codes
+    if country_filter:
+        country_lower = country_filter.lower()
+        
+        # Get all possible search terms (country codes + full name)
+        search_terms = COUNTRY_NAME_TO_CODES.get(country_lower, [country_filter])
+        search_terms.append(country_filter)  # Include original input
+        
+        # Build OR conditions for all search terms
+        conditions = []
+        for term in search_terms:
+            # Search for the term in JSON attributes
+            # stricter pattern: look for quoted term (e.g. "IE", "USA")
+            pattern = f'%"{term}"%' 
+            conditions.append(cast(Program.attributes, String).ilike(pattern))
+            
+            # Only use broad unquoted matching for longer terms (e.g. "Ireland")
+            # This prevents "ie" matching "science" or "field"
+            if len(term) > 3:
+                pattern2 = f'%{term}%'
+                conditions.append(cast(Program.attributes, String).ilike(pattern2))
+        
+        if conditions:
+            query = query.filter(or_(*conditions))
+        
+        logger.info(f"🔍 Country filter applied for: {search_terms}")
+    
+    # SQL-level Degree Filtering (Heuristic)
+    # This prevents fetching 200 "Bachelors" programs when user wants "Masters"
+    if target_degree_level:
+        degree_keywords = {
+            "masters": ["master", "msc", "ma ", "mba", "m.sc", "m.a", "post grad"],
+            "bachelors": ["bachelor", "bsc", "ba ", "undergrad", "b.sc", "b.a"],
+            "phd": ["phd", "doctor", "dphil"],
+            "diploma": ["diploma", "certificate", "associate"]
+        }
+        
+        keywords = degree_keywords.get(target_degree_level.lower(), [])
+        if keywords:
+            degree_conditions = []
+            for kw in keywords:
+                # Search case-insensitive in the whole JSON dump
+                # This is "good enough" for pre-filtering
+                degree_conditions.append(cast(Program.attributes, String).ilike(f'%{kw}%'))
+            
+            if degree_conditions:
+                query = query.filter(or_(*degree_conditions))
+                logger.info(f"🎓 Degree pre-filter applied for {target_degree_level}: {keywords}")
+
+    programs = query.offset(offset).limit(fetch_limit).all()
     logger.info(f"📊 Programs fetched from DB: {len(programs)}")
     
     results = []
     degree_filtered_count = 0
     degree_match_count = 0
     degree_unknown_count = 0
-    country_filtered_count = 0
     
     for program in programs:
         try:
@@ -393,12 +462,8 @@ def fetch_and_transform_programs(
                 # Attach metadata to candidate for scoring penalty
                 normalized["degree_match_status"] = degree_match_status
             
-            # HARD FILTER 2: Country (if specified)
-            if country_filter:
-                prog_country = normalized.get("country", "").lower()
-                if country_filter.lower() not in prog_country:
-                    country_filtered_count += 1
-                    continue
+            # NOTE: Country filtering is now done at SQL level (see above)
+            # No need for duplicate Python-level filtering
             
             results.append(normalized)
             
@@ -417,7 +482,7 @@ def fetch_and_transform_programs(
         logger.info(f"❓ Degree unknown (included with penalty): {degree_unknown_count}")
         logger.info(f"❌ Degree mismatches (excluded): {degree_filtered_count}")
     if country_filter:
-        logger.info(f"🌍 Programs excluded by country filter ({country_filter}): {country_filtered_count}")
+        logger.info(f"🌍 Country filter applied at SQL level: {country_filter}")
     logger.info(f"✅ Final candidate pool sent to scoring engine: {len(results)}")
     
     return results

@@ -24,7 +24,7 @@ from models.models import (
     Program,Service, Scholarship, LeadIn, LeadOut, Booking, BookingCreate, AustraliaScholarship, UniversityModel ,ResetPasswordRequest,ForgotPasswordRequest,
     PeerCounsellor, PeerCounsellorAvailability,PeerCounsellorBooking
 )
-from db import Base, engine, get_db
+from db import Base, engine, get_db  # engine used only at startup for create_all
 from models.models_user import User
 from models.schemas_user import UserRegister, UserLogin, UserVerify, UserOut, TokenResponse
 from utils.crud_user import get_user_by_email, create_user
@@ -67,7 +67,12 @@ BOOKINGS: list[Booking] = [
     Booking(id=1, topic="Peer Counselling", scheduled_for=datetime.utcnow()+timedelta(days=3), status="upcoming"),
 ]
 
-Base.metadata.create_all(bind=engine)
+
+@app.on_event("startup")
+def startup_create_tables():
+    """Create DB tables on startup; avoids connection at import time (Neon-friendly)."""
+    Base.metadata.create_all(bind=engine)
+
 
 DB_URL = os.environ.get("DATABASE_URL")
 session = boto3.session.Session()

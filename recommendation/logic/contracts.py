@@ -111,6 +111,7 @@ class ProgramRecommendation(BaseModel):
     degree_type: str
     country: str
     city: Optional[str] = None
+    logo_thumbnail_url: Optional[str] = None
     
     # Scoring
     overall_score: float = Field(ge=0.0, le=1.0)
@@ -180,6 +181,7 @@ class CandidateProgram(BaseModel):
     city: str = ""
     global_reputation_band: str = "unknown"
     institution_type: str = ""
+    logo_thumbnail_url: Optional[str] = None
     
     # Program data
     program_name: str = ""

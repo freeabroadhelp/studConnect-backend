@@ -58,6 +58,7 @@ def assemble_recommendation(
         degree_type=candidate.degree_type,
         country=candidate.country,
         city=candidate.city,
+        logo_thumbnail_url=candidate.logo_thumbnail_url,
         
         # Scoring
         overall_score=round(scored.overall_score, 3),

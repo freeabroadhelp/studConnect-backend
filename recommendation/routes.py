@@ -146,6 +146,7 @@ def _serialize_recommendation(rec) -> Dict[str, Any]:
         "program_id": rec.program_id,
         "university_id": rec.university_id,
         "university_name": rec.university_name,
+        "logo_thumbnail_url": rec.logo_thumbnail_url,
         "program_name": rec.program_name,
         "degree_type": rec.degree_type,
         "country": rec.country,

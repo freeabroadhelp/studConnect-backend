@@ -11,10 +11,13 @@ if not DATABASE_URL:
 class Base(DeclarativeBase):
     pass
 
-engine = create_engine(DATABASE_URL, future=True, pool_pre_ping=True)
+engine = create_engine(
+    DATABASE_URL,
+    future=True,
+    pool_pre_ping=True,
+)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
-Base.metadata.create_all(bind=engine)
 
 def get_db():
     db = SessionLocal()
