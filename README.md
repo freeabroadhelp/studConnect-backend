@@ -6,12 +6,29 @@ Create & activate a virtual environment, install dependencies, and run the serve
 
 ```bash
 python -m venv venv
-source venv/bin/activate  # Windows: .venv\\Scripts\\activate
+source venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 uvicorn main:app --reload
 ```
 
 Visit http://127.0.0.1:8000/docs for interactive API docs.
+
+## Environment Variables
+
+Create a `.env` file in the root directory with the following variables:
+
+```bash
+# Database Configuration
+DATABASE_URL=sqlite:///./studConnect.db
+
+# MongoDB Configuration
+MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/
+MONGO_DATABASE=studconnect
+
+# Other configurations...
+```
+
+**Important:** Never commit actual credentials to version control. Use environment variables or a secure secrets management system.
 
 ## Current Endpoints (v0.2 scaffold)
 - `GET /health` health check
