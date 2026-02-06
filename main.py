@@ -1395,3 +1395,45 @@ def get_student_bookings(
             for b in bookings
         ]
 
+@app.get("/api/university-compare/search", tags=["university-compare"])
+def search_universities(
+    q: str = Query(..., description="Search query for university name"),
+    limit: int = Query(15, ge=1, le=50, description="Maximum number of results"),
+    db_session=Depends(get_db)
+):
+    """
+    Search universities by name with case-insensitive partial matching.
+    Returns id, name, country, and logo for matching universities.
+    """
+    try:
+        db: Session
+        with db_session as db:
+            from sqlalchemy import func
+            
+            # Build query with JSONB text extraction and ILIKE search
+            name_field = func.jsonb_extract_path_text(UniversityModel.attributes, 'name')
+            query = db.query(UniversityModel).filter(
+                name_field.ilike(f"%{q}%")
+            ).limit(limit)
+            
+            universities = query.all()
+            
+            # Format response
+            results = []
+            for uni in universities:
+                attributes = uni.attributes or {}
+                results.append({
+                    "id": str(uni.id),
+                    "name": attributes.get("name"),
+                    "country": attributes.get("country"),
+                    "logo": attributes.get("logo")
+                })
+            
+            return results
+            
+    except Exception as e:
+        logging.error(f"University search error: {e}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to search universities: {str(e)}"}
+        )
