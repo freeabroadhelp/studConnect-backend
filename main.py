@@ -516,6 +516,7 @@ def get_programs_by_school_id(
 
 @app.get("/api/program-details", tags=["programs"], summary="List programs from program_details table")
 def list_program_details(
+    school_id: Optional[int] = Query(None, description="Filter by school ID"),
     university_name: Optional[str] = Query(None, description="University name (partial match)"),
     program_name: Optional[str] = Query(None, description="Program name (partial match)"),
     country: Optional[str] = Query(None, description="Country code (partial match)"),
@@ -530,6 +531,9 @@ def list_program_details(
         from sqlalchemy import cast, Float, func
         with db_session as db:
             query = db.query(ProgramDetail)
+
+            if school_id is not None:
+                query = query.filter(ProgramDetail.school_id == school_id)
 
             if university_name:
                 query = query.filter(
