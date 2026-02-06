@@ -527,33 +527,40 @@ def list_program_details(
 ):
     try:
         from models.models import ProgramDetail
-        from sqlalchemy import cast, Integer
+        from sqlalchemy import cast, Float, func
         with db_session as db:
             query = db.query(ProgramDetail)
 
             if university_name:
                 query = query.filter(
-                    ProgramDetail.school["name"].astext.ilike(f"%{university_name}%")
+                    func.jsonb_extract_path_text(ProgramDetail.school, 'name').ilike(f"%{university_name}%")
                 )
 
             if program_name:
                 query = query.filter(
-                    ProgramDetail.attributes["name"].astext.ilike(f"%{program_name}%")
+                    func.jsonb_extract_path_text(ProgramDetail.attributes, 'name').ilike(f"%{program_name}%")
                 )
 
             if country:
                 query = query.filter(
-                    ProgramDetail.school["country"].astext.ilike(f"%{country}%")
+                    func.jsonb_extract_path_text(ProgramDetail.school, 'country').ilike(f"%{country}%")
                 )
 
             if min_fees is not None:
                 query = query.filter(
-                    cast(ProgramDetail.attributes["tuition"].astext, Float) >= min_fees
+                    func.jsonb_extract_path_text(ProgramDetail.attributes, 'tuition') != None
+                ).filter(
+                    cast(func.jsonb_extract_path_text(ProgramDetail.attributes, 'tuition'), Float) >= min_fees
                 )
+
             if max_fees is not None:
                 query = query.filter(
-                    cast(ProgramDetail.attributes["tuition"].astext, Float) <= max_fees
+                    func.jsonb_extract_path_text(ProgramDetail.attributes, 'tuition') != None
+                ).filter(
+                    cast(func.jsonb_extract_path_text(ProgramDetail.attributes, 'tuition'), Float) <= max_fees
                 )
+
+
 
             total = query.count()
             offset = (page - 1) * page_size
