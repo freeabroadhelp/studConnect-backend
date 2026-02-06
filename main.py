@@ -447,13 +447,13 @@ async def accommodation_to_excel(request: Request):
 
 @app.get("/universities/{school_id}")
 def get_university_by_school_id(
-    school_id: str,
+    school_id: int,
     db_session=Depends(get_db)
 ):
    
     db: Session
     with db_session as db:
-        uni = db.query(UniversityModel).filter(UniversityModel.id == str(school_id)).first()
+        uni = db.query(UniversityModel).filter(UniversityModel.id == school_id).first()
         if not uni:
             raise HTTPException(status_code=404, detail="University not found")
         return {

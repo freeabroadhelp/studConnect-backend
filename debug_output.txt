@@ -1,0 +1,375 @@
+
+--- Searching for university: 'Trinity College Dublin' ---
+Found ID: 2163
+Raw Attributes JSON:
+{
+  "id": 2163,
+  "city": "Dublin",
+  "logo": {
+    "url": "https://pub-e63ee2f49d7e4f94b98011a5350eea0f.r2.dev/university_logos/original/Trinity-College-Dublin-Logo-May2022.png",
+    "file_name": "Trinity-College-Dublin-Logo-May2022.png",
+    "file_size": 16797,
+    "updated_at": "2022-05-20T08:48:57.000-04:00",
+    "url_thumbnail": "https://pub-e63ee2f49d7e4f94b98011a5350eea0f.r2.dev/university_logos/thumbnail/Trinity-College-Dublin-Logo-May2022.png",
+    "file_content_type": "image/png"
+  },
+  "name": "Trinity College Dublin",
+  "slug": "trinity-college-dublin",
+  "about": "<p style=\"text-align:justify\">Trinity College Dublin offers undergraduate and postgraduate courses across all major disciplines such as arts and humanities, business, law, engineering, science, maths and health sciences.&nbsp;</p><p style=\"text-align:justify\">Trinity\u2019s 47-acre campus is in the heart of Dublin, a safe and charming European capital city.&nbsp; The University\u2019s central location allows students partake in a prestigious academic programme coupled with access to a variety of cultural and social experiences. An array of museums, theatres, cafes, restaurants and historic sites are in close proximity to the university.&nbsp;</p><p style=\"text-align:justify\">The University has a strong tradition of intellectual enquiry, scholarship and creativity, inspiring a love of learning for over 400 years.&nbsp; Notable alumni include scientists William Rowan Hamilton, Ernest Walton and William Campbell (Nobel laureates), political thinker Edmund Burke, writers Oscar Wilde and Samuel Beckett (Nobel laureates), and former President of Ireland and UNHCR Mary Robinson.&nbsp;</p><p style=\"text-align:justify\">Trinity is ranked as the 17th most international university in the world (Times Higher Education Rankings 2020). Students and staff hail from over 120 countries and 28% of students are from outside of Ireland, making it a truly international campus.</p><p></p><div style=\"text-align:justify\"><span style=\"font-size:1rem\">International students can work part-time during their studies. On graduation, undergraduate students have the option to remain in Ireland to work for one year on the Third Level Graduate Scheme. Eligible postgraduate students can stay for up to two years. This provides students opportunities for work experience in industries and organisations in Ireland. Students may also be allowed remain in Ireland for a longer period if they secure employment that meets the criteria for a Work Permit. The US-Ireland Working Holiday Agreement provides a separate one-year work permit for US students, who can apply for this within 12 months of graduating.</span></div><div style=\"text-align:justify\"><br></div><p></p><p style=\"text-align:justify\"><b>Why Trinity College Dublin</b></p><ul><li style=\"text-align:justify\"><u>Quality of Education</u>:&nbsp;Trinity is ranked 1st in Ireland and 101st in the world.&nbsp; Trinity also ranks in the top 100 in 13 subjects, globally (according to the QS World Rankings of 2022). Students will receive a world-class education at Trinity University Dublin.</li><li style=\"text-align:justify\"><u style=\"font-size:1rem\">Employability:</u><span style=\"font-size:1rem\">&nbsp;</span>Trinity ranks 92nd in the world for Graduate Employability (QS World Rankings, 2022) and is committed to preparing its students for the ever-changing challenges of the 21st century workplace. Trinity also encourages innovation and an entrepreneurial spirit, providing incubation programmes for student-led companies, and has been named as Europe\u2019s leading university for producing venture backed entrepreneurs</li><li style=\"text-align:justify\"><u style=\"font-size:1rem\">Location:</u><span style=\"font-size:1rem\">&nbsp;</span>Trinity sits in the heart of Dublin\u2019s city centre and over the centuries the city has grown around the university. Today, this is a great advantage for students. Dublin is a vibrant, young, European capital city and everything the city has to offer is easily accessible to Trinity students. The vast array of restaurants, caf\u00e9s, delis and coffee shops (most offering student deals and discounts) cater for every taste and budget.</li><li style=\"text-align:justify\"><u>Campus</u>: Trinity\u2019s campus contains state of the art, modern facilities including the Sports Centre, Science Gallery, Nanoscience Research Centre, Long Room Hub, and the Biomedical Sciences Institute, all situated on a 47-acre campus of cobbled squares, historic buildings and green playing fields. Trinity\u2019s location is also advantageous when students are looking for a job. Dublin\u2019s Innovation District, the \u2018Silicon Docks\u2019 is within walking distance, as is the International Financial Services Centre, and a large number of other businesses and organisations have their Irish headquarters close by. The Dublin region is also home to many global corporations across a range of sectors.</li></ul>",
+  "address": "Trinity College Dublin, The University of Dublin, College Green",
+  "country": "Ireland",
+  "currency": "EUR",
+  "latitude": 53.344,
+  "province": "County of Dublin",
+  "edit_path": null,
+  "longitude": -6.25655,
+  "published": true,
+  "founded_in": 1592,
+  "video_link": null,
+  "avg_tuition": "20486.84",
+  "postal_code": "2",
+  "country_code": "IE",
+  "pgwp_visible": true,
+  "cost_of_living": "15000.0",
+  "market_country": {
+    "flag": "data:image/png;base64,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",
+    "currency": {
+      "code": "EUR",
+      "name": "Euro",
+      "sign": "\u20ac",
+      "prefix": true,
+      "minor_unit": 2
+    },
+    "pgwp_text": "<p>582 out of 582 programs are eligible for Stay Back Visa.</p><p><strong>Graduate Student who currently holds a Stamp 2</strong><br> Stamp 1G indicates you have finished your studies in Ireland and have permission to look for employment here under the <strong><a href='https://www.irishimmigration.ie/my-situation-has-changed-since-i-arrived-in-ireland/third-level-graduate-programme/%22' target='_blank' rel='noopener' role='link'>Third Level Graduate Programme</a></strong>, subject to conditions.</p><p>Stamp 1G is granted for 12 months only, except for those who have completed a master\u2019s degree programme, when a further 12 months can be provided subject to conditions.</p><p><strong>Summary of employment conditions for graduates</strong><br>You can work full time in accordance with employment law requirements, but you are not permitted to operate a business or be self-employed. If you wish to continue working after Stamp 1G expires, you must find a job that requires an employment permit and then follow the usual application process with Department of Enterprise Trade and Employment.</p><p>While on a Stamp 1G, your other permissions and conditions remain the same as for Stamp 2.</p><p><strong>Example when used:</strong><br>You may be given <strong>Stamp 1G</strong> if you have permission to:</p><ul><li>Look for work as part of the Third Level Graduate Programme.</li></ul></p><p>Read more at: <a href='https://www.irishimmigration.ie/registering-your-immigration-permission/information-on-registering/immigration-permission-stamps/' target='_blank'>https://www.irishimmigration.ie/registering-your-immigration-permission/information-on-registering/immigration-permission-stamps</a></p>",
+    "pgwp_title": "Stay Back Visa",
+    "common_name": "Ireland",
+    "internship_title": "Internship/Work Placement Available",
+    "internship_description": "Work placements and internships are methods of combining classroom-based education with practical work experience. Work placement experience, depending on the school and program, may provide academic credit for structured job experience. Work placements are full-time, paid or unpaid positions. Internships may be full-time or part-time, paid or unpaid positions."
+  },
+  "program_levels": [
+    "bachelors",
+    "diploma",
+    "3_year_bachelors",
+    "masters_degree",
+    "post_graduate_diploma"
+  ],
+  "school_group_id": 865,
+  "currency_of_fees": {
+    "code": "EUR",
+    "name": "Euro",
+    "sign": "\u20ac",
+    "prefix": true,
+    "minor_unit": 2
+  },
+  "institution_type": "Public",
+  "meta_description": "Based in Dublin, County of Dublin, this is a renowned public university founded in 1592. It offers more than 400 under-grad, post-grad and co-op programs.",
+  "avg_program_length": {
+    "graduate": "13.5789",
+    "undergraduate": "48.0487"
+  },
+  "can_work_and_study": true,
+  "coop_participating": true,
+  "pgwp_participating": true,
+  "program_categories": [
+    {
+      "name": "Arts",
+      "count": 341
+    },
+    {
+      "name": "Sciences",
+      "count": 179
+    },
+    {
+      "name": "Business, Management and Economics",
+      "count": 89
+    },
+    {
+      "name": "Engineering and Technology",
+      "count": 75
+    },
+    {
+      "name": "Law, Politics, Social, Community Service and Teaching",
+      "count": 56
+    },
+    {
+      "name": "Health Sciences, Medicine, Nursing, Paramedic and Kinesiology",
+      "count": 43
+    }
+  ],
+  "submission_through": "Direct",
+  "institution_no_type": null,
+  "program_level_counts": {
+    "diploma": 2,
+    "bachelors": 407,
+    "postgraduate": 171,
+    "3_year_bachelors": 2
+  },
+  "submission_path_note": null,
+  "application_fee_range": {
+    "maximum": "55.0",
+    "minimum": "0.0"
+  },
+  "conditional_acceptance": true,
+  "intakes_of_all_programs": [
+    "2025-09-01",
+    "2026-09-01"
+  ],
+  "decision_time_in_seconds": 1259518,
+  "categories_of_all_programs": [
+    [
+      8,
+      "Accounting"
+    ],
+    [
+      117,
+      "Anthropology"
+    ],
+    [
+      55,
+      "Architecture"
+    ],
+    [
+      4,
+      "Arts"
+    ],
+    [
+      105,
+      "Astronomy"
+    ],
+    [
+      47,
+      "Biochemistry"
+    ],
+    [
+      51,
+      "Biology"
+    ],
+    [
+      23,
+      "Biomedical Engineering"
+    ],
+    [
+      5,
+      "Business, Management and Economics"
+    ],
+    [
+      17,
+      "Chemistry"
+    ],
+    [
+      73,
+      "Community, Social Service"
+    ],
+    [
+      98,
+      "Computer Science "
+    ],
+    [
+      104,
+      "Dental"
+    ],
+    [
+      20,
+      "Electrical Engineering"
+    ],
+    [
+      2,
+      "Engineering and Technology"
+    ],
+    [
+      36,
+      "English Literature"
+    ],
+    [
+      109,
+      "Entrepreneurship"
+    ],
+    [
+      69,
+      "Environmental Engineering"
+    ],
+    [
+      29,
+      "Environmental, Earth Sciences"
+    ],
+    [
+      70,
+      "Finance, Economics"
+    ],
+    [
+      99,
+      "Fine Arts"
+    ],
+    [
+      94,
+      "Food, Nutrition, Exercise"
+    ],
+    [
+      123,
+      "Game Design, Game Animation, Game Creation"
+    ],
+    [
+      118,
+      "Gender Studies"
+    ],
+    [
+      113,
+      "General"
+    ],
+    [
+      114,
+      "General"
+    ],
+    [
+      128,
+      "General Engineering"
+    ],
+    [
+      100,
+      "Geography"
+    ],
+    [
+      122,
+      "Geology"
+    ],
+    [
+      119,
+      "Global Studies"
+    ],
+    [
+      45,
+      "Health Sciences, Medicine, Nursing, Paramedic and Kinesiology"
+    ],
+    [
+      72,
+      "History"
+    ],
+    [
+      93,
+      "Human Resources"
+    ],
+    [
+      6,
+      "Humanitarian Sciences"
+    ],
+    [
+      88,
+      "Industrial"
+    ],
+    [
+      97,
+      "International Business"
+    ],
+    [
+      58,
+      "Languages"
+    ],
+    [
+      44,
+      "Law, Politics, Police, Security"
+    ],
+    [
+      39,
+      "Law, Politics, Social, Community Service and Teaching"
+    ],
+    [
+      121,
+      "Liberal Arts"
+    ],
+    [
+      7,
+      "Management, Administration, General"
+    ],
+    [
+      68,
+      "Marketing, Analyst, Advertising"
+    ],
+    [
+      90,
+      "Material Engineering"
+    ],
+    [
+      16,
+      "Mathematics"
+    ],
+    [
+      22,
+      "Mechanical, Manufacturing, Robotic Engineering"
+    ],
+    [
+      14,
+      "Media, Photography, Film, Theatre, Performance "
+    ],
+    [
+      71,
+      "Music, Audio"
+    ],
+    [
+      111,
+      "Pharmacy"
+    ],
+    [
+      15,
+      "Physics"
+    ],
+    [
+      107,
+      "Planning (Urban)"
+    ],
+    [
+      126,
+      "Political"
+    ],
+    [
+      53,
+      "Psychology, Philosophy, Therapy"
+    ],
+    [
+      85,
+      "Public Relation"
+    ],
+    [
+      120,
+      "Radiography"
+    ],
+    [
+      115,
+      "Religion"
+    ],
+    [
+      3,
+      "Sciences"
+    ],
+    [
+      101,
+      "Sociology"
+    ],
+    [
+      91,
+      "Supply Chain"
+    ],
+    [
+      67,
+      "Teaching, Early Development, Child Care"
+    ],
+    [
+      19,
+      "Technology, Software, Computer, IT"
+    ]
+  ],
+  "conditional_acceptance_text": "Even if you do NOT meet our minimum English requirement (IELTS or TOEFL), you still can get conditionally accepted in the program of your choice with the condition of completing our English program prior to starting your chosen program.",
+  "exceptional_submission_path": null,
+  "designated_learning_institution_no": null,
+  "number_of_pgwp_participating_programs": 582
+}
+
+--- Key Check ---
+Name: Trinity College Dublin
+City: Dublin
+State keys check: province=County of Dublin, state=None, region=None
+Country: Ireland
+Tuition keys check: avg_tuition=20486.84, tuition_minimum=None, tuitionMinimum=None
+Levels keys check: program_levels=['bachelors', 'diploma', '3_year_bachelors', 'masters_degree', 'post_graduate_diploma'], levels_offered=None, degreeTypes=None
+Scholarships keys check: None
+
+--- Done ---
