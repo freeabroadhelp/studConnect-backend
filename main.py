@@ -633,11 +633,11 @@ def google_oauth_login(
     token = payload.get("token")
     redirect_uri = payload.get("redirect_uri")
 
-GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
-GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
+    GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
+    GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
 
-if not GOOGLE_CLIENT_ID:
-    raise HTTPException(status_code=500, detail="Google client ID not configured")
+    if not GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=500, detail="Google client ID not configured")
 
     id_token_str = None
 
