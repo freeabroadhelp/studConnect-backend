@@ -635,6 +635,14 @@ def google_oauth_login(
 
     GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
     GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
+    
+    # DEBUG LOGGING
+    logging.info(f"OAuth Payload: {payload}")
+    logging.info(f"Redirect URI from payload: {redirect_uri}")
+    logging.info(f"GOOGLE_CLIENT_ID present: {bool(GOOGLE_CLIENT_ID)}")
+    if GOOGLE_CLIENT_ID:
+        logging.info(f"GOOGLE_CLIENT_ID (masked): ...{GOOGLE_CLIENT_ID[-4:]}")
+    logging.info(f"GOOGLE_CLIENT_SECRET present: {bool(GOOGLE_CLIENT_SECRET)}")
 
     if not GOOGLE_CLIENT_ID:
         raise HTTPException(status_code=500, detail="Google client ID not configured")
@@ -656,6 +664,10 @@ def google_oauth_login(
                 "redirect_uri": redirect_uri if redirect_uri else "postmessage", # 'postmessage' is often used for SPA or infer from header
                 "grant_type": "authorization_code",
             }
+
+            print("DEBUG redirect_uri:", token_data["redirect_uri"])
+            print("DEBUG GOOGLE_CLIENT_ID:", token_data["client_id"])
+            print("DEBUG CLIENT_SECRET_PRESENT:", bool(token_data["client_secret"]))
             
             import requests # Import here to ensure it's available
             response = requests.post(token_endpoint, data=token_data)
