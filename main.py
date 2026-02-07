@@ -632,7 +632,10 @@ def google_oauth_login(
     if not token:
         raise HTTPException(status_code=400, detail="Missing Google token")
 
+    # Debug: Print the environment variable being used
     GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
+    print(f"DEBUG: GOOGLE_CLIENT_ID from environment: {GOOGLE_CLIENT_ID}")
+    
     if not GOOGLE_CLIENT_ID:
         raise HTTPException(status_code=500, detail="Google client ID not configured")
 
