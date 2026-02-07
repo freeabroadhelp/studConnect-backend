@@ -628,19 +628,62 @@ def google_oauth_login(
     payload: dict = Body(...),
     db_session=Depends(get_db)
 ):
+    # Support both new 'code' flow and legacy 'token' flow for backward compatibility during transition
+    code = payload.get("code")
     token = payload.get("token")
-    if not token:
-        raise HTTPException(status_code=400, detail="Missing Google token")
+    redirect_uri = payload.get("redirect_uri")
 
-    # Debug: Print the environment variable being used
-    GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
-    print(f"DEBUG: GOOGLE_CLIENT_ID from environment: {GOOGLE_CLIENT_ID}")
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
+
+if not GOOGLE_CLIENT_ID:
+    raise HTTPException(status_code=500, detail="Google client ID not configured")
+
+    id_token_str = None
+
+    # 1. New Flow: Server-side Code Exchange
+    if code:
+        if not GOOGLE_CLIENT_SECRET:
+            raise HTTPException(status_code=500, detail="Google client secret not configured")
+        
+        try:
+            # Exchange auth code for tokens
+            token_endpoint = "https://oauth2.googleapis.com/token"
+            token_data = {
+                "code": code,
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "redirect_uri": redirect_uri if redirect_uri else "postmessage", # 'postmessage' is often used for SPA or infer from header
+                "grant_type": "authorization_code",
+            }
+            
+            import requests # Import here to ensure it's available
+            response = requests.post(token_endpoint, data=token_data)
+            
+            if not response.ok:
+                logging.error(f"Google token exchange failed: {response.text}")
+                raise HTTPException(status_code=401, detail="Failed to exchange authorization code")
+                
+            tokens = response.json()
+            id_token_str = tokens.get("id_token")
+            
+        except Exception as e:
+            logging.error(f"Google OAuth error: {str(e)}")
+            raise HTTPException(status_code=401, detail=f"Google OAuth failed: {str(e)}")
+
+    # 2. Legacy Flow: Client-side Token (Deprecating)
+    elif token:
+        id_token_str = token
     
-    if not GOOGLE_CLIENT_ID:
-        raise HTTPException(status_code=500, detail="Google client ID not configured")
+    else:
+         raise HTTPException(status_code=400, detail="Missing Google code or token")
 
+    if not id_token_str:
+        raise HTTPException(status_code=401, detail="No ID token obtained")
+
+    # 3. Verify ID Token
     try:
-        idinfo = id_token.verify_oauth2_token(token, google_requests.Request(), GOOGLE_CLIENT_ID)
+        idinfo = id_token.verify_oauth2_token(id_token_str, google_requests.Request(), GOOGLE_CLIENT_ID)
         email = idinfo.get("email")
         full_name = idinfo.get("name", "")
         if not email:
