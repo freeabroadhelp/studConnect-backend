@@ -84,49 +84,100 @@ def generate_otp(length: int = 6) -> str:
 
 @app.post("/auth/register", response_model=dict, tags=["auth"], summary="Register & send OTP")
 def register(payload: UserRegister, db_session=Depends(get_db)):
+    """Register a new user or resend OTP for unverified user."""
+    email = payload.email.lower().strip()
+    
     db: Session
     with db_session as db:
-        existing = get_user_by_email(db, payload.email.lower())
+        existing = get_user_by_email(db, email)
+        
         if existing:
             if existing.is_verified:
                 raise HTTPException(status_code=400, detail="Email already registered")
+            # Update existing unverified user
             user = existing
             user.full_name = payload.full_name
             user.role = payload.role
             user.password_hash = hash_password(payload.password)
+            logging.info(f"[REGISTER] Updated existing unverified user: {email}")
         else:
+            # Create new user
             user = create_user(
                 db,
-                email=payload.email,
+                email=email,
                 full_name=payload.full_name,
                 role=payload.role,
                 password_hash=hash_password(payload.password),
             )
+            logging.info(f"[REGISTER] Created new user: {email}")
+        
+        # Generate and set OTP
         code = generate_otp()
         user.set_otp(code)
-        if not send_otp(user.email, code):
-            raise HTTPException(status_code=500, detail="Could not send verification email (check SMTP settings)")
-        return {"message": "OTP sent to email for verification"}
+        logging.info(f"[REGISTER] OTP generated for: {email}")
+        
+        # Commit user + OTP to database
+        db.commit()
+        logging.info(f"[REGISTER] Commit successful for: {email}, user_id={user.id}")
+    
+    # Send OTP email (after commit, outside transaction)
+    email_sent = send_otp(user.email, code)
+    logging.info(f"[REGISTER] Email send result for {email}: {email_sent}")
+    
+    if not email_sent:
+        raise HTTPException(status_code=500, detail="Could not send verification email (check SMTP settings)")
+    
+    return {"message": "OTP sent to email for verification"}
 
-@app.post("/auth/verify", response_model=TokenResponse, tags=["auth"], summary="Verify OTP & get token")
-def verify_otp(payload: UserVerify, db_session=Depends(get_db)):
+@app.post("/auth/verify-otp", response_model=dict, tags=["auth"], summary="Verify OTP")
+def verify_otp_route(payload: UserVerify, db_session=Depends(get_db)):
+    """Verify OTP and mark user as verified."""
+    email = payload.email.lower().strip()
+    
     db: Session
     with db_session as db:
-        user = get_user_by_email(db, payload.email.lower())
+        logging.info(f"[VERIFY-OTP] Verification attempt for: {email}")
+        
+        # Find user
+        user = get_user_by_email(db, email)
         if not user:
+            logging.warning(f"[VERIFY-OTP] User not found: {email}")
             raise HTTPException(status_code=404, detail="User not found")
+        
+        # Already verified
         if user.is_verified:
-            return TokenResponse(access_token=create_token(str(user.id)))
+            logging.info(f"[VERIFY-OTP] Already verified: {email}")
+            return {"message": "Email already verified", "verified": True}
+        
+        # No OTP pending
         if not user.otp_code or not user.otp_expires:
-            raise HTTPException(status_code=400, detail="No OTP pending")
+            logging.warning(f"[VERIFY-OTP] No OTP pending for: {email}")
+            raise HTTPException(status_code=400, detail="No OTP pending. Please request a new one.")
+        
+        # OTP expired
         if datetime.utcnow() > user.otp_expires:
-            raise HTTPException(status_code=400, detail="OTP expired")
-        if payload.code != user.otp_code:
+            logging.warning(f"[VERIFY-OTP] OTP expired for: {email}")
+            raise HTTPException(status_code=400, detail="OTP expired. Please request a new one.")
+        
+        # Invalid OTP
+        if payload.code.strip() != user.otp_code:
+            logging.warning(f"[VERIFY-OTP] Invalid OTP for: {email}")
             raise HTTPException(status_code=400, detail="Invalid OTP")
-        user.is_verified = True
-        user.otp_code = None
-        user.otp_expires = None
-        return TokenResponse(access_token=create_token(str(user.id)))
+        
+        # Valid OTP - update user
+        try:
+            user.is_verified = True
+            user.otp_code = None
+            user.otp_expires = None
+            db.commit()
+            db.refresh(user)
+            logging.info(f"[VERIFY-OTP] Commit successful, user verified: {email}, user_id={user.id}")
+        except Exception as e:
+            db.rollback()
+            logging.error(f"[VERIFY-OTP] Commit failed for {email}: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail="Verification failed. Please try again.")
+    
+    return {"message": "Email verified successfully", "verified": True}
 
 @app.post("/auth/login", response_model=TokenResponse, tags=["auth"], summary="Login (requires verified)")
 def login(payload: UserLogin, db_session=Depends(get_db)):
