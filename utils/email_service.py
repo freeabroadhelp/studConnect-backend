@@ -5,7 +5,7 @@ import resend
 logger = logging.getLogger("otp_mail")
 
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
-EMAIL_FROM = os.getenv("EMAIL_FROM", "StudConnect <onboarding@resend.dev>")
+EMAIL_FROM = os.getenv("EMAIL_FROM", "StudConnect <noreply@yournextuniversity.com>")
 
 resend.api_key = RESEND_API_KEY
 
