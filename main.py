@@ -232,9 +232,13 @@ def login(payload: UserLogin, db_session=Depends(get_db)):
         return TokenResponse(access_token=create_token(str(user.id)))
 
 @app.post("/auth/forgot-password", response_model=dict, tags=["auth"], summary="Request password reset OTP")
-def forgot_password(payload: UserLogin, db_session=Depends(get_db)):
+def forgot_password(payload: dict = Body(...), db_session=Depends(get_db)):
     """Request password reset - sends OTP to email."""
-    email = payload.email.lower().strip()
+    email = payload.get("email", "").lower().strip()
+    
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+    
     logging.info(f"[FORGOT-PASSWORD] Request for: {email}")
     
     db: Session
