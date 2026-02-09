@@ -129,6 +129,42 @@ def register(payload: UserRegister, db_session=Depends(get_db)):
     
     return {"message": "OTP sent to email for verification"}
 
+@app.post("/auth/resend-otp", response_model=dict, tags=["auth"], summary="Resend OTP")
+def resend_otp(payload: UserLogin, db_session=Depends(get_db)):
+    """Resend OTP to an existing user (only email needed from UserLogin schema)."""
+    email = payload.email.lower().strip()
+    
+    db: Session
+    with db_session as db:
+        logging.info(f"[RESEND-OTP] Request for: {email}")
+        
+        user = get_user_by_email(db, email)
+        if not user:
+            logging.warning(f"[RESEND-OTP] User not found: {email}")
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        if user.is_verified:
+            logging.info(f"[RESEND-OTP] Already verified: {email}")
+            return {"message": "Email already verified. Please login."}
+        
+        # Generate new OTP
+        code = generate_otp()
+        user.set_otp(code)
+        logging.info(f"[RESEND-OTP] New OTP generated for: {email}")
+        
+        # Commit OTP to database
+        db.commit()
+        logging.info(f"[RESEND-OTP] OTP committed for: {email}")
+    
+    # Send OTP email
+    email_sent = send_otp(user.email, code)
+    logging.info(f"[RESEND-OTP] Email send result for {email}: {email_sent}")
+    
+    if not email_sent:
+        raise HTTPException(status_code=500, detail="Could not send verification email")
+    
+    return {"message": "OTP resent successfully"}
+
 @app.post("/auth/verify-otp", response_model=dict, tags=["auth"], summary="Verify OTP")
 def verify_otp_route(payload: UserVerify, db_session=Depends(get_db)):
     """Verify OTP and mark user as verified."""
@@ -172,12 +208,17 @@ def verify_otp_route(payload: UserVerify, db_session=Depends(get_db)):
             db.commit()
             db.refresh(user)
             logging.info(f"[VERIFY-OTP] Commit successful, user verified: {email}, user_id={user.id}")
+            
+            # Generate JWT token for auto-login
+            access_token = create_token({"sub": str(user.id), "email": user.email, "role": user.role})
+            logging.info(f"[VERIFY-OTP] Token generated for auto-login: {email}")
+            
         except Exception as e:
             db.rollback()
             logging.error(f"[VERIFY-OTP] Commit failed for {email}: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail="Verification failed. Please try again.")
     
-    return {"message": "Email verified successfully", "verified": True}
+    return {"message": "Email verified successfully", "verified": True, "access_token": access_token}
 
 @app.post("/auth/login", response_model=TokenResponse, tags=["auth"], summary="Login (requires verified)")
 def login(payload: UserLogin, db_session=Depends(get_db)):
@@ -189,6 +230,87 @@ def login(payload: UserLogin, db_session=Depends(get_db)):
         if not user.is_verified:
             raise HTTPException(status_code=403, detail="Email not verified")
         return TokenResponse(access_token=create_token(str(user.id)))
+
+@app.post("/auth/forgot-password", response_model=dict, tags=["auth"], summary="Request password reset OTP")
+def forgot_password(payload: UserLogin, db_session=Depends(get_db)):
+    """Request password reset - sends OTP to email."""
+    email = payload.email.lower().strip()
+    logging.info(f"[FORGOT-PASSWORD] Request for: {email}")
+    
+    db: Session
+    with db_session as db:
+        user = get_user_by_email(db, email)
+        
+        # Security: Always return success to prevent email enumeration
+        if not user:
+            logging.info(f"[FORGOT-PASSWORD] User not found (silent): {email}")
+            return {"message": "If this email exists, a reset OTP has been sent"}
+        
+        # Generate OTP
+        code = generate_otp()
+        user.set_otp(code)
+        logging.info(f"[FORGOT-PASSWORD] OTP generated for: {email}")
+        
+        db.commit()
+        logging.info(f"[FORGOT-PASSWORD] OTP committed for: {email}")
+    
+    # Send OTP email with password reset subject
+    email_sent = send_otp(user.email, code)
+    logging.info(f"[FORGOT-PASSWORD] Email send result for {email}: {email_sent}")
+    
+    return {"message": "If this email exists, a reset OTP has been sent"}
+
+@app.post("/auth/reset-password", response_model=dict, tags=["auth"], summary="Reset password with OTP")
+def reset_password(payload: dict = Body(...), db_session=Depends(get_db)):
+    """Reset password using OTP verification."""
+    email = payload.get("email", "").lower().strip()
+    code = payload.get("code", "").strip()
+    new_password = payload.get("new_password", "")
+    
+    logging.info(f"[RESET-PASSWORD] Request for: {email}")
+    
+    if not email or not code or not new_password:
+        raise HTTPException(status_code=400, detail="Email, code, and new_password are required")
+    
+    if len(new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    
+    db: Session
+    with db_session as db:
+        user = get_user_by_email(db, email)
+        
+        if not user:
+            logging.warning(f"[RESET-PASSWORD] User not found: {email}")
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Check OTP exists
+        if not user.otp_code or not user.otp_expires:
+            logging.warning(f"[RESET-PASSWORD] No OTP pending for: {email}")
+            raise HTTPException(status_code=400, detail="No reset request pending. Please request a new one.")
+        
+        # Check OTP expired
+        if datetime.utcnow() > user.otp_expires:
+            logging.warning(f"[RESET-PASSWORD] OTP expired for: {email}")
+            raise HTTPException(status_code=400, detail="OTP expired. Please request a new one.")
+        
+        # Check OTP matches
+        if code != user.otp_code:
+            logging.warning(f"[RESET-PASSWORD] Invalid OTP for: {email}")
+            raise HTTPException(status_code=400, detail="Invalid OTP")
+        
+        # Update password
+        try:
+            user.password_hash = hash_password(new_password)
+            user.otp_code = None
+            user.otp_expires = None
+            db.commit()
+            logging.info(f"[RESET-PASSWORD] Password updated successfully for: {email}")
+        except Exception as e:
+            db.rollback()
+            logging.error(f"[RESET-PASSWORD] Failed to update password for {email}: {e}")
+            raise HTTPException(status_code=500, detail="Failed to reset password. Please try again.")
+    
+    return {"message": "Password reset successful"}
 
 def auth_user(authorization: str | None = Header(default=None), db_session=Depends(get_db)) -> UserOut:
     if not authorization or not authorization.lower().startswith("bearer "):
