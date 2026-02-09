@@ -29,7 +29,7 @@ from models.models_user import User
 from models.schemas_user import UserRegister, UserLogin, UserVerify, UserOut, TokenResponse
 from utils.crud_user import get_user_by_email, create_user
 from utils.auth_utils import hash_password, verify_password, create_token, decode_token
-from utils.email_service import send_otp, smtp_diagnostics, send_email  # Make sure send_email is imported
+from utils.email_service import send_otp, send_email
 from dotenv import load_dotenv
 
 load_dotenv()
