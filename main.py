@@ -259,7 +259,7 @@ def forgot_password(payload: dict = Body(...), db_session=Depends(get_db)):
         logging.info(f"[FORGOT-PASSWORD] OTP committed for: {email}")
     
     # Send OTP email with password reset subject
-    email_sent = send_otp(user.email, code)
+    email_sent = send_otp(email, code)
     logging.info(f"[FORGOT-PASSWORD] Email send result for {email}: {email_sent}")
     
     return {"message": "If this email exists, a reset OTP has been sent"}
