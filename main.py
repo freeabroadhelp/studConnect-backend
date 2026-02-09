@@ -893,11 +893,23 @@ def google_oauth_login(
                 password_hash=hash_password(random_password),
             )
             user.is_verified = True
+            db.commit()
+            db.refresh(user)
         elif not user.is_verified:
             user.is_verified = True
+            db.commit()
+            db.refresh(user)
 
-        access_token = create_token(str(user.id))
-        return {"access_token": access_token}
+        # Extract user_id BEFORE session closes
+        user_id = str(user.id)
+        
+    # Generate token AFTER ensuring user.id is set
+    if not user_id or user_id == "None":
+        logging.error(f"[GOOGLE-OAUTH] user_id is None for email: {email}")
+        raise HTTPException(status_code=500, detail="User creation failed")
+    
+    access_token = create_token(user_id)
+    return {"access_token": access_token}
 
 @app.get("/peer-counsellors/{counsellor_id}/available-slots", tags=["peer-counsellors"])
 def get_available_slots(
