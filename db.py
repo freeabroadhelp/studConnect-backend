@@ -16,7 +16,7 @@ engine = create_engine(
     future=True,
     pool_pre_ping=True,
 )
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True, expire_on_commit=False)
 
 
 def get_db():

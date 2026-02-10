@@ -156,8 +156,8 @@ def resend_otp(payload: UserLogin, db_session=Depends(get_db)):
         db.commit()
         logging.info(f"[RESEND-OTP] OTP committed for: {email}")
     
-    # Send OTP email
-    email_sent = send_otp(user.email, code)
+    # Send OTP email (use local email variable, not user.email after session closes)
+    email_sent = send_otp(email, code)
     logging.info(f"[RESEND-OTP] Email send result for {email}: {email_sent}")
     
     if not email_sent:
