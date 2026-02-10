@@ -210,7 +210,7 @@ def verify_otp_route(payload: UserVerify, db_session=Depends(get_db)):
             logging.info(f"[VERIFY-OTP] Commit successful, user verified: {email}, user_id={user.id}")
             
             # Generate JWT token for auto-login
-            access_token = create_token({"sub": str(user.id), "email": user.email, "role": user.role})
+            access_token = create_token(str(user.id))
             logging.info(f"[VERIFY-OTP] Token generated for auto-login: {email}")
             
         except Exception as e:
