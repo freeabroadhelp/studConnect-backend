@@ -10,7 +10,7 @@ MONGO_DETAILS = os.getenv("MONGO_URI")
 if not MONGO_DETAILS:
     raise ValueError("MONGO_URI environment variable is required")
 
-DATABASE_NAME = os.getenv("MONGO_DATABASE", "studconnect")
+DATABASE_NAME = os.getenv("MONGO_DATABASE", "yournextuniversity")
 
 # Create async client
 client = AsyncIOMotorClient(MONGO_DETAILS)
@@ -18,3 +18,4 @@ db = client[DATABASE_NAME]
 
 # Collections
 users_collection = db["users"]
+profiles_collection = db["profiles"]

@@ -73,7 +73,7 @@ peer_counsellors_data = [
         "university": "George Brown College - St.James Campus, Toronto",
         "program": "Project Management - 2025",
         "location": "Toronto, Canada",
-        "profile_image_url": "https://lh3.googleusercontent.com/d/1ZCES9uhhGj2SeRaQA8aX-UfI6Eo5eCBN",
+        "profile_image_url": "/peers/vijayan.png",
         "about": "Over 2 years of learning life abroad and achieving education milestones - Life is like a roller coaster and we gotta two choices, either suffer or enjoy and I am on the thrilling side taking steps towards success",
         "charges": 699,
         "languages": "English, Hindi"
@@ -121,7 +121,7 @@ peer_counsellors_data = [
         "university": "Auckland University",
         "program": "Level 5 Disability Aging and Health Care",
         "location": "India",
-        "profile_image_url": "https://lh3.googleusercontent.com/d/1ZCES9uhhGj2SeRaQA8aX-UfI6Eo5eCBN",
+        "profile_image_url": "/peers/shrit.png",
         "about": "I am a good learner",
         "charges": 699,
         "languages": "English"
@@ -193,7 +193,7 @@ peer_counsellors_data = [
         "university": "Queen Mary University of London",
         "program": "MSc Biotechnology & Synthetic Biology, 2025-2026",
         "location": "Ggn-India / London-UK",
-        "profile_image_url": "https://lh3.googleusercontent.com/d/1ZCES9uhhGj2SeRaQA8aX-UfI6Eo5eCBN",
+        "profile_image_url": "/peers/nandini.png",
         "about": "Nandini Pandey, Emerging Biotechnology graduate & Climate Youth Leader working at the intersection of science, sustainability & community impact. Works with Commonwealth (INDIA) and student organizations in UK.",
         "charges": 699,
         "languages": "English, Hindi"
