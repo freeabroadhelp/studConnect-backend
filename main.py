@@ -452,7 +452,7 @@ async def upload_avatar(
     from fastapi import HTTPException
     from sqlalchemy.orm import Session
     from models.models_user import User
-    from db_mongo import users_collection
+    from db_mongo import users_collection, profiles_collection
     import uuid
     import os
     from urllib.parse import quote
@@ -492,9 +492,18 @@ async def upload_avatar(
     }
     
     # Update user in MongoDB collection
+    logging.info(f"[AVATAR-DEBUG] Saving to users_collection | user_id={current_user.id} | avatar_url={avatar_url}")
     result = await users_collection.update_one(
         {"user_id": current_user.id},
         {"$set": user_data},
+        upsert=True
+    )
+    logging.info(f"[AVATAR-DEBUG] Mongo result | matched={result.matched_count} | modified={result.modified_count} | upserted_id={result.upserted_id}")
+
+    # Also save avatar_url to profiles_collection so GET /api/profile/{user_id} returns it
+    await profiles_collection.update_one(
+        {"user_id": current_user.id},
+        {"$set": {"avatar_url": avatar_url, "updated_at": datetime.utcnow()}},
         upsert=True
     )
     
