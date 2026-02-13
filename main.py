@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, Depends, Header, Query, Path, Request, Body, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from datetime import datetime, timedelta
 from recommendation.routes import router as recommendation_router
 from profile_routes import router as profile_router
@@ -42,6 +43,10 @@ app = FastAPI()
 
 app.include_router(recommendation_router)
 app.include_router(profile_router)
+
+# Serve uploaded files (avatars, etc.)
+os.makedirs("uploads", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 app.add_middleware(
     CORSMiddleware,
@@ -469,8 +474,14 @@ async def upload_avatar(
     # Generate unique filename
     ext = os.path.splitext(file.filename)[1]
     unique_filename = f"avatars/{current_user.id}_{uuid.uuid4()}{ext}"
-    
-    # For now, we'll simulate storing the URL in the MongoDB
+
+    # Save file to disk
+    save_dir = os.path.join("uploads", "avatars")
+    os.makedirs(save_dir, exist_ok=True)
+    save_path = os.path.join("uploads", unique_filename)
+    with open(save_path, "wb") as f:
+        f.write(content)
+
     avatar_url = f"/uploads/{unique_filename}"
     
     # Update user record in MongoDB
