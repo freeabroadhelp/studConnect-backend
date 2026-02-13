@@ -444,6 +444,7 @@ async def update_user_profile(
 
 @app.post("/users/upload-avatar", response_model=dict, tags=["users"], summary="Upload user avatar")
 async def upload_avatar(
+    request: Request,
     file: UploadFile = File(...),
     current_user: UserOut = Depends(auth_user),
     db_session=Depends(get_db)
@@ -482,7 +483,7 @@ async def upload_avatar(
     with open(save_path, "wb") as f:
         f.write(content)
 
-    avatar_url = f"/uploads/{unique_filename}"
+    avatar_url = f"{request.base_url}uploads/{unique_filename}"
     
     # Update user record in MongoDB
     user_data = {
